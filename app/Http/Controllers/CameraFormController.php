@@ -19,48 +19,56 @@ class CameraFormController extends Controller
      * Display a listing of camera forms grouped by audits.
      */
     public function index(Request $request)
-    {
-        $dateRangeType = $request->input('date_range_type', 'daily');
+{
+    $dateRangeType = $request->input('date_range_type', 'daily');
 
-        // Build query for audits with filters
-        $query = Audit::with(['store', 'user', 'cameraForms.entity', 'cameraForms.rating'])
-            ->whereHas('cameraForms.entity', function ($q) use ($dateRangeType) {
-                $q->where('date_range_type', $dateRangeType);
-            });
+    // Get all entities for the current tab (these will be the dynamic columns)
+    $entities = Entity::with('category')
+        ->where('date_range_type', $dateRangeType)
+        ->orderBy('category_id')
+        ->orderBy('entity_label')
+        ->get();
 
-        // Date range filter
-        if ($request->filled('date_from')) {
-            $query->where('date', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->where('date', '<=', $request->date_to);
-        }
+    // Build query for audits with filters
+    $query = Audit::with(['store', 'user', 'cameraForms.entity', 'cameraForms.rating'])
+        ->whereHas('cameraForms.entity', function ($q) use ($dateRangeType) {
+            $q->where('date_range_type', $dateRangeType);
+        });
 
-        // Store filter
-        if ($request->filled('store_id')) {
-            $query->where('store_id', $request->store_id);
-        }
-
-        // Group filter
-        if ($request->filled('group')) {
-            $query->whereHas('store', function ($q) use ($request) {
-                $q->where('group', $request->group);
-            });
-        }
-
-        $audits = $query->orderBy('date', 'desc')->paginate(15);
-
-        // Get filter options
-        $stores = Store::select('id', 'store', 'group')->get();
-        $groups = Store::select('group')->distinct()->whereNotNull('group')->pluck('group');
-
-        return Inertia::render('CameraForms/Index', [
-            'audits' => $audits,
-            'stores' => $stores,
-            'groups' => $groups,
-            'filters' => $request->only(['date_range_type', 'date_from', 'date_to', 'store_id', 'group']),
-        ]);
+    // Date range filter
+    if ($request->filled('date_from')) {
+        $query->where('date', '>=', $request->date_from);
     }
+    if ($request->filled('date_to')) {
+        $query->where('date', '<=', $request->date_to);
+    }
+
+    // Store filter
+    if ($request->filled('store_id')) {
+        $query->where('store_id', $request->store_id);
+    }
+
+    // Group filter
+    if ($request->filled('group')) {
+        $query->whereHas('store', function ($q) use ($request) {
+            $q->where('group', $request->group);
+        });
+    }
+
+    $audits = $query->orderBy('date', 'desc')->paginate(15);
+
+    // Get filter options
+    $stores = Store::select('id', 'store', 'group')->get();
+    $groups = Store::select('group')->distinct()->whereNotNull('group')->pluck('group');
+
+    return Inertia::render('CameraForms/Index', [
+        'audits' => $audits,
+        'entities' => $entities, // Add this
+        'stores' => $stores,
+        'groups' => $groups,
+        'filters' => $request->only(['date_range_type', 'date_from', 'date_to', 'store_id', 'group']),
+    ]);
+}
 
     /**
      * Show the form for creating a new camera form.
@@ -146,11 +154,13 @@ class CameraFormController extends Controller
     /**
      * Update the specified camera form in storage.
      */
-    public function update(UpdateCameraFormRequest $request, Audit $audit)
+    public function update(UpdateCameraFormRequest $request, $id)
     {
         DB::beginTransaction();
 
         try {
+            $audit = Audit::findOrFail($id);
+
             // Update the audit record
             $audit->update([
                 'store_id' => $request->store_id,
@@ -177,12 +187,16 @@ class CameraFormController extends Controller
 
             return redirect()->route('camera-forms.index')
                 ->with('success', 'Camera form updated successfully.');
+
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return back()->withErrors(['error' => 'Failed to update camera form.']);
+            \Log::error('Update failed: ' . $e->getMessage());
+
+            return back()->withErrors(['error' => 'Failed to update camera form: ' . $e->getMessage()]);
         }
     }
+
 
     /**
      * Remove the specified camera form from storage.
@@ -202,4 +216,19 @@ class CameraFormController extends Controller
             return back()->withErrors(['error' => 'Failed to delete: ' . $e->getMessage()]);
         }
     }
+
+    public function show($id)
+    {
+        $audit = Audit::with([
+            'store',
+            'user',
+            'cameraForms.entity.category',
+            'cameraForms.rating'
+        ])->findOrFail($id);
+
+        return Inertia::render('CameraForms/Show', [
+            'audit' => $audit,
+        ]);
+    }
+
 }

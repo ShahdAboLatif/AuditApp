@@ -1,11 +1,12 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/app-layout';
-import { Audit, PaginatedData, Store } from '@/types/models';
+import { Audit, Entity, PaginatedData, Store } from '@/types/models';
 import { PageProps } from '@/types';
 
 interface IndexProps extends Record<string, unknown> {
     audits: PaginatedData<Audit>;
+    entities: Entity[];
     stores: Store[];
     groups: number[];
     filters: {
@@ -17,7 +18,14 @@ interface IndexProps extends Record<string, unknown> {
     };
 }
 
-export default function Index({ auth, audits, stores, groups, filters }: PageProps<IndexProps>) {
+export default function Index({
+    auth,
+    audits,
+    entities = [],
+    stores,
+    groups,
+    filters
+}: PageProps<IndexProps>) {
     const [activeTab, setActiveTab] = useState<'daily' | 'weekly'>(
         filters.date_range_type || 'daily'
     );
@@ -63,6 +71,12 @@ export default function Index({ auth, audits, stores, groups, filters }: PagePro
                 preserveScroll: true,
             });
         }
+    };
+
+    // Helper function to get rating label for a specific entity in an audit
+    const getRatingForEntity = (audit: Audit, entityId: number): string => {
+        const cameraForm = audit.camera_forms?.find(cf => cf.entity_id === entityId);
+        return cameraForm?.rating?.label || '-';
     };
 
     return (
@@ -181,24 +195,31 @@ export default function Index({ auth, audits, stores, groups, filters }: PagePro
                         </div>
                     </div>
 
-                    {/* Table */}
+                    {/* Dynamic Table */}
                     <div className="relative w-full overflow-auto">
                         <table className="w-full caption-bottom text-sm">
                             <thead className="border-b">
                                 <tr className="border-b transition-colors hover:bg-muted/50">
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground whitespace-nowrap">
                                         Date
                                     </th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground whitespace-nowrap">
                                         Store
                                     </th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground whitespace-nowrap">
                                         User
                                     </th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                                        Entities
-                                    </th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+                                    {/* Dynamic Entity Columns */}
+                                    {entities.map((entity) => (
+                                        <th
+                                            key={entity.id}
+                                            className="h-12 px-4 text-center align-middle font-medium text-muted-foreground whitespace-nowrap"
+                                            title={entity.entity_label}
+                                        >
+                                            {entity.entity_label}
+                                        </th>
+                                    ))}
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground whitespace-nowrap">
                                         Actions
                                     </th>
                                 </tr>
@@ -206,7 +227,10 @@ export default function Index({ auth, audits, stores, groups, filters }: PagePro
                             <tbody>
                                 {audits.data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="h-24 text-center text-muted-foreground">
+                                        <td
+                                            colSpan={entities.length + 4}
+                                            className="h-24 text-center text-muted-foreground"
+                                        >
                                             No camera forms found.
                                         </td>
                                     </tr>
@@ -216,14 +240,34 @@ export default function Index({ auth, audits, stores, groups, filters }: PagePro
                                             key={audit.id}
                                             className="border-b transition-colors hover:bg-muted/50"
                                         >
-                                            <td className="p-4 align-middle">{audit.date}</td>
-                                            <td className="p-4 align-middle">{audit.store?.store}</td>
-                                            <td className="p-4 align-middle">{audit.user?.name}</td>
-                                            <td className="p-4 align-middle">
-                                                {audit.camera_forms?.length || 0}
+                                            <td className="p-4 align-middle whitespace-nowrap">
+                                                {new Date(audit.date).toLocaleDateString()}
                                             </td>
-                                            <td className="p-4 align-middle">
+                                            <td className="p-4 align-middle whitespace-nowrap">
+                                                {audit.store?.store}
+                                            </td>
+                                            <td className="p-4 align-middle whitespace-nowrap">
+                                                {audit.user?.name}
+                                            </td>
+                                            {/* Dynamic Entity Values */}
+                                            {entities.map((entity) => (
+                                                <td
+                                                    key={entity.id}
+                                                    className="p-4 align-middle text-center"
+                                                >
+                                                    <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-medium rounded-md bg-muted">
+                                                        {getRatingForEntity(audit, entity.id)}
+                                                    </span>
+                                                </td>
+                                            ))}
+                                            <td className="p-4 align-middle whitespace-nowrap">
                                                 <div className="flex gap-2">
+                                                    <Link
+                                                        href={`/camera-forms/${audit.id}`}
+                                                        className="text-sm font-medium text-accent-foreground hover:underline"
+                                                    >
+                                                        View
+                                                    </Link>
                                                     <Link
                                                         href={`/camera-forms/${audit.id}/edit`}
                                                         className="text-sm font-medium text-primary hover:underline"
