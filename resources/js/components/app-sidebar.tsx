@@ -22,11 +22,7 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
-    {
-        title: 'Cameras',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
+
 ];
 
 const footerNavItems: NavItem[] = [

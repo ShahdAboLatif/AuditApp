@@ -38,6 +38,15 @@ export default function Edit({
             </AuthenticatedLayout>
         );
     }
+    // ADD THIS DEBUG BLOCK
+    console.log('=== EDIT PAGE DEBUG ===');
+    console.log('Full audit object:', audit);
+    console.log('audit.camera_forms exists?', !!audit.camera_forms);
+    console.log('audit.camera_forms:', audit.camera_forms);
+    console.log('Number of camera_forms:', audit.camera_forms?.length || 0);
+    console.log('Store ID from audit:', audit.store_id);
+    console.log('Date from audit:', audit.date);
+    console.log('========================');
 
     const [dateRangeType, setDateRangeType] = useState<'daily' | 'weekly'>('daily');
     const [reportType, setReportType] = useState<'main' | 'secondary' | ''>('');

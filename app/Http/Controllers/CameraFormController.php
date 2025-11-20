@@ -181,12 +181,19 @@ class CameraFormController extends Controller
     /**
      * Remove the specified camera form from storage.
      */
-    public function destroy(Audit $audit)
+    public function destroy($id)
     {
-        // Cascade delete will automatically remove related camera_forms
-        $audit->delete();
+        try {
+            $audit = Audit::findOrFail($id);
+            $audit->delete();
 
-        return redirect()->route('camera-forms.index')
-            ->with('success', 'Camera form deleted successfully.');
+            return redirect()->route('camera-forms.index')
+                ->with('success', 'Camera form deleted successfully.');
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete audit: ' . $e->getMessage());
+
+            return back()->withErrors(['error' => 'Failed to delete: ' . $e->getMessage()]);
+        }
     }
 }
