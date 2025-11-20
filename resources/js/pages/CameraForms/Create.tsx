@@ -113,6 +113,42 @@ export default function Create({
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
+
+                    {/* Filters Card */}
+                    <div className="rounded-lg border bg-accent/50 p-6">
+                        <h3 className="text-lg font-semibold mb-4">Filter Entities</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Date Range Type</label>
+                                <select
+                                    value={dateRangeType}
+                                    onChange={(e) => setDateRangeType(e.target.value as 'daily' | 'weekly')}
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Report Type</label>
+                                <select
+                                    value={reportType}
+                                    onChange={(e) => setReportType(e.target.value as 'main' | 'secondary' | '')}
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    <option value="">All Types</option>
+                                    <option value="main">Main</option>
+                                    <option value="secondary">Secondary</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Showing {filteredEntities.length} entities
+                        </p>
+                    </div>
+
+
                     {/* Basic Info Card */}
                     <div className="rounded-lg border bg-card p-6">
                         <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
@@ -157,39 +193,7 @@ export default function Create({
                         </div>
                     </div>
 
-                    {/* Filters Card */}
-                    <div className="rounded-lg border bg-accent/50 p-6">
-                        <h3 className="text-lg font-semibold mb-4">Filter Entities</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Date Range Type</label>
-                                <select
-                                    value={dateRangeType}
-                                    onChange={(e) => setDateRangeType(e.target.value as 'daily' | 'weekly')}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                >
-                                    <option value="daily">Daily</option>
-                                    <option value="weekly">Weekly</option>
-                                </select>
-                            </div>
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Report Type</label>
-                                <select
-                                    value={reportType}
-                                    onChange={(e) => setReportType(e.target.value as 'main' | 'secondary' | '')}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                >
-                                    <option value="">All Types</option>
-                                    <option value="main">Main</option>
-                                    <option value="secondary">Secondary</option>
-                                </select>
-                            </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-2">
-                            Showing {filteredEntities.length} entities
-                        </p>
-                    </div>
 
                     {/* Entities */}
                     <div className="space-y-4">

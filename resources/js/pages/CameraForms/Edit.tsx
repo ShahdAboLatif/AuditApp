@@ -6,7 +6,6 @@ import { PageProps } from '@/types';
 
 interface EditProps extends Record<string, unknown> {
     audit: Audit;
-    entities: Entity[];
     ratings: Rating[];
     stores: Store[];
 }
@@ -21,11 +20,9 @@ interface EntityFormData {
 export default function Edit({
     auth,
     audit,
-    entities = [],
     ratings = [],
     stores = []
 }: PageProps<EditProps>) {
-    // Add safety check for audit
     if (!audit) {
         return (
             <AuthenticatedLayout user={auth.user}>
@@ -38,47 +35,39 @@ export default function Edit({
             </AuthenticatedLayout>
         );
     }
-    // ADD THIS DEBUG BLOCK
-    console.log('=== EDIT PAGE DEBUG ===');
-    console.log('Full audit object:', audit);
-    console.log('audit.camera_forms exists?', !!audit.camera_forms);
-    console.log('audit.camera_forms:', audit.camera_forms);
-    console.log('Number of camera_forms:', audit.camera_forms?.length || 0);
-    console.log('Store ID from audit:', audit.store_id);
-    console.log('Date from audit:', audit.date);
-    console.log('========================');
 
-    const [dateRangeType, setDateRangeType] = useState<'daily' | 'weekly'>('daily');
-    const [reportType, setReportType] = useState<'main' | 'secondary' | ''>('');
     const [entityData, setEntityData] = useState<Record<number, EntityFormData>>({});
-    const [storeId, setStoreId] = useState(audit?.store_id?.toString() || '');
-    const [date, setDate] = useState(audit?.date || '');
+    const [storeId, setStoreId] = useState(audit.store_id?.toString() || '');
+    const [date, setDate] = useState(() => {
+        if (audit.date) {
+            const dateObj = new Date(audit.date);``
+            return dateObj.toISOString().split('T')[0];
+        }
+        return '';
+    });
+
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<any>({});
 
-    const filteredEntities = entities.filter((entity) => {
-        const matchesDateRange = entity.date_range_type === dateRangeType;
-        const matchesReportType = !reportType || entity.report_type === reportType;
-        return matchesDateRange && matchesReportType;
-    });
+    // Get entities directly from camera_forms
+    const entitiesWithData = audit.camera_forms
+        ?.map(cf => cf.entity)
+        .filter(Boolean) as Entity[];
 
+    // Initialize entity data from existing camera_forms
     useEffect(() => {
         const initialData: Record<number, EntityFormData> = {};
 
-        filteredEntities.forEach((entity) => {
-            const existingForm = audit.camera_forms?.find(
-                (cf) => cf.entity_id === entity.id
-            );
-
-            initialData[entity.id] = {
-                entity_id: entity.id,
-                rating_id: existingForm?.rating_id || null,
-                note: existingForm?.note || '',
+        audit.camera_forms?.forEach((cf) => {
+            initialData[cf.entity_id] = {
+                entity_id: cf.entity_id,
+                rating_id: cf.rating_id || null,
+                note: cf.note || '',
             };
         });
 
         setEntityData(initialData);
-    }, [dateRangeType, reportType, audit.camera_forms]);
+    }, [audit.camera_forms]);
 
     const handleSubmit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -114,7 +103,8 @@ export default function Edit({
         }));
     };
 
-    const groupedEntities = filteredEntities.reduce((acc, entity) => {
+    // Group entities by category
+    const groupedEntities = entitiesWithData.reduce((acc, entity) => {
         const categoryLabel = entity.category?.label || 'Uncategorized';
         if (!acc[categoryLabel]) {
             acc[categoryLabel] = [];
@@ -132,7 +122,7 @@ export default function Edit({
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight">Edit Camera Form</h1>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Update the inspection form for camera monitoring
+                            Update inspection values for this camera form
                         </p>
                     </div>
                     <a
@@ -188,41 +178,14 @@ export default function Edit({
                         </div>
                     </div>
 
-                    {/* Filters Card */}
-                    <div className="rounded-lg border bg-accent/50 p-6">
-                        <h3 className="text-lg font-semibold mb-4">Filter Entities</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Date Range Type</label>
-                                <select
-                                    value={dateRangeType}
-                                    onChange={(e) => setDateRangeType(e.target.value as 'daily' | 'weekly')}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                >
-                                    <option value="daily">Daily</option>
-                                    <option value="weekly">Weekly</option>
-                                </select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Report Type</label>
-                                <select
-                                    value={reportType}
-                                    onChange={(e) => setReportType(e.target.value as 'main' | 'secondary' | '')}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                >
-                                    <option value="">All Types</option>
-                                    <option value="main">Main</option>
-                                    <option value="secondary">Secondary</option>
-                                </select>
-                            </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-2">
-                            Showing {filteredEntities.length} entities
+                    {/* Info Banner */}
+                    <div className="rounded-lg border bg-accent/30 p-4">
+                        <p className="text-sm text-muted-foreground">
+                            Editing {entitiesWithData.length} entities from this audit. Update their ratings and notes below.
                         </p>
                     </div>
 
-                    {/* Entities */}
+                    {/* Entities Grouped by Category */}
                     <div className="space-y-4">
                         {Object.entries(groupedEntities).map(([categoryLabel, categoryEntities]) => (
                             <div key={categoryLabel} className="rounded-lg border bg-card">
@@ -279,6 +242,12 @@ export default function Edit({
                             </div>
                         ))}
                     </div>
+
+                    {entitiesWithData.length === 0 && (
+                        <div className="rounded-lg border bg-card p-6 text-center">
+                            <p className="text-muted-foreground">No entities found for this audit.</p>
+                        </div>
+                    )}
 
                     {errors.entities && (
                         <p className="text-sm text-destructive">{errors.entities}</p>

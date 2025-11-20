@@ -121,21 +121,27 @@ class CameraFormController extends Controller
     /**
      * Show the form for editing the specified camera form.
      */
-    public function edit(Audit $audit)
+    public function edit($id)
     {
-        $audit->load(['store', 'cameraForms.entity.category', 'cameraForms.rating']);
+        $audit = Audit::with([
+            'store',
+            'user',
+            'cameraForms.entity.category',
+            'cameraForms.rating'
+        ])->findOrFail($id);
 
-        $entities = Entity::with('category')->get();
+        // We don't even need to send separate entities anymore
+        // since they're already loaded in audit.cameraForms.entity
         $ratings = Rating::all();
         $stores = Store::all();
 
         return Inertia::render('CameraForms/Edit', [
             'audit' => $audit,
-            'entities' => $entities,
             'ratings' => $ratings,
             'stores' => $stores,
         ]);
     }
+
 
     /**
      * Update the specified camera form in storage.
