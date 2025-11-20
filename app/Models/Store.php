@@ -20,4 +20,9 @@ class Store extends Model
     {
         return $this->hasMany(CameraForm::class);
     }
+
+    public function audits(): HasMany
+    {
+        return $this->hasMany(Audit::class);
+    }
 }
