@@ -79,8 +79,59 @@ export default function Index({
         router.get('/camera-reports');
     };
 
-    const handleExport = () => {
-        alert('Export feature coming soon!');
+    const exportToCSV = () => {
+        const { summary, entities } = reportData;
+
+        // Build CSV content
+        let csvContent = 'data:text/csv;charset=utf-8,';
+
+        // Header row: Store, Group, Entity1, Entity2, ..., Score Without Auto Fail, Total Score
+        let headerRow = 'Store,Group,' + entities.map((e) => e.entity_label).join(',') + ',Score Without Auto Fail,Total Score';
+        csvContent += encodeURIComponent(headerRow) + '%0A';
+
+        // Data rows
+        summary.forEach((storeSummary) => {
+            let row = `"${storeSummary.store_name}",${storeSummary.store_group || ''}`;
+
+            // Add data for each entity
+            entities.forEach((entity) => {
+                const entityData = storeSummary.entities[entity.id];
+                if (entityData) {
+                    const ratingText = entityData.rating_counts
+                        .filter((rc) => rc.count > 0)
+                        .map((rc) => `${rc.count} ${rc.rating_label || 'No Rating'}`)
+                        .join('; ');
+                    row += `,"${ratingText || '-'}"`;
+                } else {
+                    row += ',-';
+                }
+            });
+
+            const scoreWithoutAuto = reportData.scoreData[storeSummary.store_id]?.score_without_auto_fail ?? '-';
+            const scoreWithAuto = reportData.scoreData[storeSummary.store_id]?.score_with_auto_fail ?? '-';
+            row += `,${scoreWithoutAuto},${scoreWithAuto}`;
+
+            csvContent += encodeURIComponent(row) + '%0A';
+        });
+
+        // Create download link
+        const link = document.createElement('a');
+        link.setAttribute('href', csvContent);
+
+        // Generate filename with filters
+        const timestamp = new Date().toISOString().split('T')[0];
+        const filterParts = [];
+        if (reportType) filterParts.push(`Type-${reportType}`);
+        if (storeId) filterParts.push(`Store-${storeId}`);
+        if (group) filterParts.push(`Group-${group}`);
+        filterParts.push(`Week-${week}-${year}`);
+
+        const filename = `camera-report-${filterParts.join('_')}_${timestamp}.csv`;
+        link.setAttribute('download', filename);
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const formatEntitySummary = (storeSummary: StoreSummary, entityId: number): string => {
@@ -124,7 +175,7 @@ export default function Index({
                         </p>
                     </div>
                     <button
-                        onClick={handleExport}
+                        onClick={exportToCSV}
                         className="inline-flex items-center gap-2 justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors"
                     >
                         <Download className="h-4 w-4" />
