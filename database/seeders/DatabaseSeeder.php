@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'audit',
                 'email' => 'audit@example.com',
+                'role' => 'Admin',
                 'password' => 'auditpassword',
                 'email_verified_at' => now(),
             ]
