@@ -16,11 +16,15 @@ class Entity extends Model
         'category_id',
         'date_range_type',
         'report_type',
+        'sort_order',
+        'active',
     ];
 
     protected $casts = [
         'date_range_type' => 'string',
         'report_type' => 'string',
+        'sort_order' => 'integer',
+        'active' => 'boolean',
     ];
 
     /**
@@ -37,5 +41,15 @@ class Entity extends Model
     public function cameraForms(): HasMany
     {
         return $this->hasMany(CameraForm::class);
+    }
+
+    public function customReports()
+    {
+        return $this->belongsToMany(
+            CustomReport::class,
+            'custom_report_entities',
+            'entity_id',
+            'custom_report_id'
+        );
     }
 }
