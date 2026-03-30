@@ -38,7 +38,7 @@ class EventRouter
 
     public function resolve(string $subject): string
     {
-        log::error('Resolving handler for subject', ['subject' => $subject, 'map_keys' => array_keys($this->map)]);
+        log::error(['map' => $this->map, 'subject' => $subject]);
         if (!isset($this->map[$subject])) {
             throw new Exception("No handler for subject '{$subject}'");
         }

@@ -346,12 +346,15 @@ class JetStreamConsumer
 
             try {
                 $handlerClass = $this->router->resolve($evtSubject);
-                log::error($handlerClass, [
+
+            } catch (Throwable $e) {
+                // No handler defined for this subject → not an error
+                log::error("No handler for subject '{$evtSubject}' - ACKing and skipping", [
+                    'stream' => $streamName,
+                    'consumer' => $durable,
                     'event_id' => $eventId,
                     'subject' => $evtSubject,
                 ]);
-            } catch (Throwable $e) {
-                // No handler defined for this subject → not an error
                 DB::commit();
                 $this->ackSafe($msg, $streamName, $durable, 'no_handler_skip');
                 return;
