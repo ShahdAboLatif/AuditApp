@@ -247,7 +247,7 @@ class JetStreamConsumer
 
     private function handleMessage($msg, string $streamName, string $durable): void
     {
-        Log::info('RAW MESSAGE RECEIVED', [
+        Log::warning('RAW MESSAGE RECEIVED', [
             'msg_class' => get_class($msg),
             'subject' => $this->getMsgSubject($msg),
             'reply' => $this->getMsgReply($msg),
@@ -275,7 +275,7 @@ class JetStreamConsumer
         }
 
         $raw = $this->extractBody($msg);
-        Log::info('RAW PAYLOAD', ['raw' => $raw]);
+        Log::warning('RAW PAYLOAD', ['raw' => $raw]);
         if ($raw === '') {
             // Poison → TERM it once so it never redelivers and never blocks.
             $this->termSafe($msg, $streamName, $durable, 'empty_payload');
