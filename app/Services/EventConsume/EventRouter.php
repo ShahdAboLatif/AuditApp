@@ -35,10 +35,12 @@ class EventRouter
             "{$authPrefix}.assignment.user_role_store.bulk_assigned" => \App\Services\EventConsume\Handlers\UserStoreRoleBulkAssignedHandler::class,
         ];
     }
-
+    public function getResolvedMap(): array
+    {
+        return $this->map;
+    }
     public function resolve(string $subject): string
     {
-        log::error(['map' => $this->map, 'subject' => $subject]);
         if (!isset($this->map[$subject])) {
             throw new Exception("No handler for subject '{$subject}'");
         }
