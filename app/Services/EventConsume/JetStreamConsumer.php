@@ -345,11 +345,11 @@ class JetStreamConsumer
             }
 
             try {
-                log::error('Resolving handler for event', [
+                $handlerClass = $this->router->resolve($evtSubject);
+                log::error($handlerClass, [
                     'event_id' => $eventId,
                     'subject' => $evtSubject,
                 ]);
-                $handlerClass = $this->router->resolve($evtSubject);
             } catch (Throwable $e) {
                 // No handler defined for this subject → not an error
                 DB::commit();
@@ -359,11 +359,6 @@ class JetStreamConsumer
 
             /** @var EventHandlerInterface $handler */
             $handler = app($handlerClass);
-            log::error('Handling event with resolved handler', [
-                'event_id' => $eventId,
-                'subject' => $evtSubject,
-                'handler' => $handlerClass,
-            ]);
             $handler->handle($event);
 
             $inbox->processed_at = now();
