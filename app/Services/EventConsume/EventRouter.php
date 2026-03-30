@@ -35,7 +35,10 @@ class EventRouter
             "{$authPrefix}.assignment.user_role_store.bulk_assigned" => \App\Services\EventConsume\Handlers\UserStoreRoleBulkAssignedHandler::class,
         ];
     }
-
+    public function getResolvedMap(): array
+    {
+        return $this->map;
+    }
     public function resolve(string $subject): string
     {
         if (!isset($this->map[$subject])) {

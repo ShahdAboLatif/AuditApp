@@ -247,6 +247,7 @@ class JetStreamConsumer
 
     private function handleMessage($msg, string $streamName, string $durable): void
     {
+
         /**
          * Hard gate:
          * Only real JetStream deliveries have a $JS.ACK.* reply subject.
@@ -269,7 +270,6 @@ class JetStreamConsumer
         }
 
         $raw = $this->extractBody($msg);
-
         if ($raw === '') {
             // Poison → TERM it once so it never redelivers and never blocks.
             $this->termSafe($msg, $streamName, $durable, 'empty_payload');
@@ -346,6 +346,7 @@ class JetStreamConsumer
 
             try {
                 $handlerClass = $this->router->resolve($evtSubject);
+
             } catch (Throwable $e) {
                 // No handler defined for this subject → not an error
                 DB::commit();
