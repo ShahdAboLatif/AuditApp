@@ -349,21 +349,6 @@ class JetStreamConsumer
 
             } catch (Throwable $e) {
                 // No handler defined for this subject → not an error
-                Log::warning('No handler resolved for event subject', [
-                    'evt_subject' => $evtSubject,
-                    'event_id' => $eventId ?? null,
-                    'stream' => $streamName,
-                    'durable' => $durable,
-                    'source' => $source ?? null,
-                    'dev_mode' => config('nats.dev_mode'),
-                    'exception_message' => $e->getMessage(),
-                    'exception_class' => get_class($e),
-                    'router_map' => $this->router->getResolvedMap(),
-                    'available_subjects' => array_keys($this->router->getResolvedMap()),
-                    'event_subject_from_payload' => $event['subject'] ?? null,
-                    'event_type_from_payload' => $event['type'] ?? null,
-                    'full_event' => $event,
-                ]);
                 DB::commit();
                 $this->ackSafe($msg, $streamName, $durable, 'no_handler_skip');
                 return;
