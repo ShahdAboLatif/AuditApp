@@ -247,6 +247,11 @@ class JetStreamConsumer
 
     private function handleMessage($msg, string $streamName, string $durable): void
     {
+        Log::info('RAW MESSAGE RECEIVED', [
+            'msg_class' => get_class($msg),
+            'subject' => $this->getMsgSubject($msg),
+            'reply' => $this->getMsgReply($msg),
+        ]);
         /**
          * Hard gate:
          * Only real JetStream deliveries have a $JS.ACK.* reply subject.
@@ -263,13 +268,14 @@ class JetStreamConsumer
         // Domain allowlist: ignore anything not matching your domain prefixes
         // NOTE: for real JS deliveries, subject should already be the stream subject.
         if (!$this->isAllowedDomainSubject($subject)) {
+            Log::warning('Subject rejected', ['subject' => $subject]);
             // Term it so it never blocks ack-pending.
             $this->termSafe($msg, $streamName, $durable, 'subject_not_allowed');
             return;
         }
 
         $raw = $this->extractBody($msg);
-
+        Log::info('RAW PAYLOAD', ['raw' => $raw]);
         if ($raw === '') {
             // Poison → TERM it once so it never redelivers and never blocks.
             $this->termSafe($msg, $streamName, $durable, 'empty_payload');
