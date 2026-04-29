@@ -15,7 +15,7 @@ class ScoringService
     }
 
     /**
-     * Count total occurrences of urgent/auto fail across the whole week (all dates).
+     * Count the number of distinct dates that contain at least one urgent/auto fail.
      */
     public function countZeroScoreOccurrences(array $formsByDate): int
     {
@@ -25,6 +25,7 @@ class ScoringService
             foreach ($forms as $form) {
                 if ($this->isZeroScoreLabel($form->rating_label ?? null)) {
                     $count++;
+                    break;
                 }
             }
         }
@@ -68,17 +69,17 @@ class ScoringService
     /**
      * Weekly score:
      * - If any WEEKLY audit has urgent/auto fail => 0
-     * - Else if total urgent/auto fail occurrences >= 3 => 0
+     * - Else if urgent/auto fail appears on >= 3 distinct dates => 0
      * - Else average of daily scores
      */
     public function calculateWeeklyScore(array $formsByDate, bool $hasWeeklyZeroScore): ?float
     {
-
         if ($hasWeeklyZeroScore) {
             return 0.0;
         }
+
         // Weekly rule:
-        // If total urgent + auto fail across the week >= 3 → 0
+        // If urgent + auto fail appears on 3+ different days, the weekly score is 0.
         if ($this->countZeroScoreOccurrences($formsByDate) >= 3) {
             return 0.0;
         }
