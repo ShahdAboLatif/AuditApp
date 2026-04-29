@@ -30,7 +30,19 @@ class CameraReportController extends Controller
     {
         $this->scoringService = $scoringService;
     }
+    private function resolveCustomReportEntityIds($customReportId): ?array
+    {
+        if ($customReportId === null || $customReportId === '') {
+            return null;
+        }
 
+        return DB::table('custom_report_entities')
+            ->where('custom_report_id', (int) $customReportId)
+            ->pluck('entity_id')
+            ->map(fn($id) => (int) $id)
+            ->values()
+            ->all();
+    }
     /**
      * GET /api/camera-reports
      * Returns report data used by frontend dashboards
@@ -38,6 +50,7 @@ class CameraReportController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+
         if (!$user) {
             return $this->unauthorized();
         }
@@ -66,13 +79,16 @@ class CameraReportController extends Controller
         $categories = Category::select('id', 'label')
             ->orderBy('sort_order')
             ->get();
+
         return $this->success('Camera report generated', [
             'report' => $reportData,
             'stores' => $stores,
             'groups' => $groups,
             'ratings' => $ratings,
             'categories' => $categories,
-            'custom_reports' => CustomReport::select('id', 'name')->orderBy('name')->get(),
+            'custom_reports' => CustomReport::select('id', 'name')
+                ->orderBy('name')
+                ->get(),
             'filters' => $request->only([
                 'store_id',
                 'group',
@@ -80,8 +96,9 @@ class CameraReportController extends Controller
                 'date_from',
                 'date_to',
                 'rating_id',
-                'category_ids', // ADD
+                'category_ids',
                 'date_range_type',
+                'custom_report_id',
             ]),
         ]);
     }
@@ -590,15 +607,31 @@ class CameraReportController extends Controller
         $ratingId = $request->input('rating_id');
         $customReportId = $request->input('custom_report_id');
         $dateRangeType = $request->input('date_range_type');
-        $ratingId = ($ratingId !== null && $ratingId !== '') ? (int) $ratingId : null;
-        $dateRangeType = $request->input('date_range_type'); // 'weekly', 'daily', or null
         $categoryIds = $request->input('category_ids');
 
-        $allowedStoreIds = $user->allowedStoreIdsCached();
+        $ratingId = ($ratingId !== null && $ratingId !== '') ? (int) $ratingId : null;
         $categoryIds = is_array($categoryIds) ? array_filter($categoryIds) : [];
 
+        $allowedStoreIds = $user->allowedStoreIdsCached();
+
+        /*
+         * This is the important part.
+         * If custom_report_id is present, we resolve the exact entity IDs from the pivot table.
+         * Then we apply those IDs everywhere:
+         * - camera forms
+         * - entity list
+         * - notes
+         * - summary skeleton
+         */
+        $selectedEntityIds = $this->resolveCustomReportEntityIds($customReportId);
+
+        /*
+         * If a custom report exists but has no entities, force empty result.
+         */
+        $forceEmptyEntities = ($selectedEntityIds !== null && count($selectedEntityIds) === 0);
+
         /**
-         * 1) Base query for ratings/scoring rows (NO notes join to avoid duplication)
+         * 1) Base query for ratings/scoring rows.
          */
         $cameraFormsBase = DB::table('camera_forms')
             ->join('audits', 'camera_forms.audit_id', '=', 'audits.id')
@@ -620,40 +653,31 @@ class CameraReportController extends Controller
             ->when($storeId, fn($q) => $q->where('stores.id', $storeId))
             ->when($group, fn($q) => $q->where('stores.group', $group))
             ->when($reportType, fn($q) => $q->where('entities.report_type', $reportType))
-            ->when(!empty($categoryIds), function ($q) use ($categoryIds) {
-                $q->whereIn('entities.category_id', $categoryIds);
-            });
+            ->when(!empty($categoryIds), fn($q) => $q->whereIn('entities.category_id', $categoryIds));
 
         $this->applyDateRangeTypeFilter($cameraFormsBase, $dateRangeType);
+
         if ($dateFrom) {
             $cameraFormsBase->where('audits.date', '>=', $dateFrom);
         }
+
         if ($dateTo) {
             $cameraFormsBase->where('audits.date', '<=', $dateTo);
         }
 
-        // update here
-        // ========================
-        if ($customReportId) {
-            $selectedEntityIds = DB::table('custom_report_entities')
-                ->where('custom_report_id', $customReportId)
-                ->pluck('entity_id')
-                ->toArray();
-
-            if (empty($selectedEntityIds)) {
-                $cameraFormsBase->whereRaw('1 = 0');
-            } else {
-                $cameraFormsBase->whereIn('entities.id', $selectedEntityIds);
-            }
-            // ========================
+        if ($forceEmptyEntities) {
+            $cameraFormsBase->whereRaw('1 = 0');
+        } elseif ($selectedEntityIds !== null) {
+            $cameraFormsBase->whereIn('entities.id', $selectedEntityIds);
         }
 
         /**
          * Rating filter behavior:
-         * - Only include STORES that have at least one row with rating_id = X
-         * - BUT keep ALL rows (all ratings) for those stores
+         * - Only include stores that have at least one matching rating.
+         * - Keep all rows for those eligible stores.
          */
         $eligibleStoreIds = null;
+
         if ($ratingId !== null) {
             $eligibleStoreIds = (clone $cameraFormsBase)
                 ->where('camera_forms.rating_id', $ratingId)
@@ -668,54 +692,48 @@ class CameraReportController extends Controller
         $cameraForms = $cameraFormsBase->get();
 
         /**
-         * 2) Entities list (for frontend)
+         * 2) Entity list for frontend.
+         * This must be filtered by selected custom report entity IDs.
+         * Otherwise the summary will output every entity.
          */
         $entitiesQuery = Entity::with('category')
-            ->when(!empty($categoryIds), function ($q) use ($categoryIds) {
-                $q->whereIn('category_id', $categoryIds);
-            });
+            ->when(!empty($categoryIds), fn($q) => $q->whereIn('category_id', $categoryIds))
+            ->when($reportType, fn($q) => $q->where('report_type', $reportType));
 
-        // update here
-        // ======================
-        if ($customReportId) {
-            $customReport = CustomReport::findOrFail($customReportId);
-            $entitiesQuery->whereHas('customReports', function ($q) use ($customReportId) {
-                $q->where('custom_report_id', $customReportId);
-            });
-        }
-        // ======================
-
-        if ($reportType) {
-            $entitiesQuery->where('report_type', $reportType);
-        }
         if (in_array($dateRangeType, ['daily', 'weekly'], true)) {
             $entitiesQuery->where('date_range_type', $dateRangeType);
         }
+
+        if ($forceEmptyEntities) {
+            $entitiesQuery->whereRaw('1 = 0');
+        } elseif ($selectedEntityIds !== null) {
+            $entitiesQuery->whereIn('id', $selectedEntityIds);
+        }
+
         $entities = $entitiesQuery
             ->orderBy('category_id')
             ->orderBy('entity_label')
             ->get();
 
         /**
-         * 3) Filtered stores
+         * 3) Filtered stores.
          */
-        $storesQuery = Store::query()->whereIn('id', $allowedStoreIds);
-
-        if ($storeId) {
-            $storesQuery->where('id', $storeId);
-        }
-        if ($group) {
-            $storesQuery->where('group', $group);
-        }
+        $storesQuery = Store::query()
+            ->whereIn('id', $allowedStoreIds)
+            ->when($storeId, fn($q) => $q->where('id', $storeId))
+            ->when($group, fn($q) => $q->where('group', $group));
 
         if ($ratingId !== null) {
             $storesQuery->whereIn('id', $eligibleStoreIds ?: [-1]);
         }
 
-        $filteredStores = $storesQuery->orderBy('store')->get();
+        $filteredStores = $storesQuery
+            ->orderBy('store')
+            ->get();
 
         /**
-         * 4) Notes query
+         * 4) Notes query.
+         * This must also be filtered by selected custom report entity IDs.
          */
         $notesBase = DB::table('camera_form_notes')
             ->join('camera_forms', 'camera_forms.id', '=', 'camera_form_notes.camera_form_id')
@@ -735,11 +753,19 @@ class CameraReportController extends Controller
             ->when(!empty($categoryIds), fn($q) => $q->whereIn('entities.category_id', $categoryIds));
 
         $this->applyDateRangeTypeFilter($notesBase, $dateRangeType);
+
         if ($dateFrom) {
             $notesBase->where('audits.date', '>=', $dateFrom);
         }
+
         if ($dateTo) {
             $notesBase->where('audits.date', '<=', $dateTo);
+        }
+
+        if ($forceEmptyEntities) {
+            $notesBase->whereRaw('1 = 0');
+        } elseif ($selectedEntityIds !== null) {
+            $notesBase->whereIn('entities.id', $selectedEntityIds);
         }
 
         if ($ratingId !== null) {
@@ -749,6 +775,7 @@ class CameraReportController extends Controller
         $notesRows = $notesBase->get();
 
         $notesByStoreEntity = [];
+
         foreach ($notesRows as $r) {
             if (is_string($r->note) && trim($r->note) !== '') {
                 $notesByStoreEntity[$r->store_id][$r->entity_id][] = trim($r->note);
@@ -756,9 +783,10 @@ class CameraReportController extends Controller
         }
 
         /**
-         * 5) Group forms by store + date for scoring
+         * 5) Group forms by store + date for scoring.
          */
         $formsByStoreByDate = [];
+
         foreach ($cameraForms as $f) {
             $formsByStoreByDate[$f->store_id][$f->date][] = $f;
         }
@@ -770,18 +798,21 @@ class CameraReportController extends Controller
             $sid = $store->id;
 
             $entitiesSummary = [];
+
             foreach ($entities as $entity) {
                 $forms = $cameraForms
                     ->where('store_id', $sid)
                     ->where('entity_id', $entity->id);
 
                 $counts = [];
+
                 foreach ($forms as $form) {
                     $label = $form->rating_label ?? 'No Rating';
                     $counts[$label] = ($counts[$label] ?? 0) + 1;
                 }
 
                 $ratingCounts = [];
+
                 foreach ($counts as $label => $count) {
                     $ratingCounts[] = [
                         'rating_label' => $label,
@@ -799,20 +830,23 @@ class CameraReportController extends Controller
             }
 
             /**
-             * 6) Scoring logic (unchanged)
+             * 6) Scoring logic.
              */
             $perDateScoresWithoutAuto = [];
             $hasWeeklyZeroScore = false;
 
             if (isset($formsByStoreByDate[$sid])) {
                 foreach ($formsByStoreByDate[$sid] as $dateStr => $formsForDate) {
-                    $pass = $fail = 0;
+                    $pass = 0;
+                    $fail = 0;
 
                     foreach ($formsForDate as $form) {
                         $label = strtolower($form->rating_label ?? '');
+
                         if ($label === 'pass') {
                             $pass++;
                         }
+
                         if ($label === 'fail') {
                             $fail++;
                         }
@@ -820,12 +854,16 @@ class CameraReportController extends Controller
 
                     $denom = $pass + $fail;
                     $scoreWithoutAuto = ($denom > 0) ? $pass / $denom : null;
+
                     $perDateScoresWithoutAuto[] = $scoreWithoutAuto;
 
                     foreach ($formsForDate as $form) {
                         $label = strtolower($form->rating_label ?? '');
 
-                        if (in_array($label, ['auto fail', 'urgent'], true) && $form->date_range_type === 'weekly') {
+                        if (
+                            in_array($label, ['auto fail', 'urgent'], true)
+                            && $form->date_range_type === 'weekly'
+                        ) {
                             $hasWeeklyZeroScore = true;
                             break;
                         }
@@ -833,18 +871,26 @@ class CameraReportController extends Controller
                 }
             }
 
-            $valsWithoutAuto = array_filter($perDateScoresWithoutAuto, fn($v) => is_numeric($v));
+            $valsWithoutAuto = array_filter(
+                $perDateScoresWithoutAuto,
+                fn($v) => is_numeric($v)
+            );
+
             $finalScoreWithoutAuto = count($valsWithoutAuto)
                 ? round(array_sum($valsWithoutAuto) / count($valsWithoutAuto), 2)
                 : null;
 
             $finalScoreWithAuto = null;
+
             if (isset($formsByStoreByDate[$sid])) {
                 $weeklyScore = $this->scoringService->calculateWeeklyScore(
                     $formsByStoreByDate[$sid],
                     $hasWeeklyZeroScore
                 );
-                $finalScoreWithAuto = $weeklyScore !== null ? round($weeklyScore, 2) : null;
+
+                $finalScoreWithAuto = $weeklyScore !== null
+                    ? round($weeklyScore, 2)
+                    : null;
             }
 
             $scoreData[(string) $sid] = [
@@ -876,14 +922,17 @@ class CameraReportController extends Controller
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
         $ratingId = $request->input('rating_id');
-        $ratingId = ($ratingId !== null && $ratingId !== '') ? (int) $ratingId : null;
         $dateRangeType = $request->input('date_range_type');
         $categoryIds = $request->input('category_ids');
-        $categoryIds = is_array($categoryIds) ? array_filter($categoryIds) : [];
-        // update here
         $customReportId = $request->input('custom_report_id');
 
+        $ratingId = ($ratingId !== null && $ratingId !== '') ? (int) $ratingId : null;
+        $categoryIds = is_array($categoryIds) ? array_filter($categoryIds) : [];
+
         $allowedStoreIds = $user->allowedStoreIdsCached();
+
+        $selectedEntityIds = $this->resolveCustomReportEntityIds($customReportId);
+        $forceEmptyEntities = ($selectedEntityIds !== null && count($selectedEntityIds) === 0);
 
         $q = DB::table('camera_form_note_attachments as a')
             ->join('camera_form_notes as n', 'n.id', '=', 'a.camera_form_note_id')
@@ -904,12 +953,21 @@ class CameraReportController extends Controller
             ->when($group, fn($qq) => $qq->where('stores.group', $group))
             ->when($reportType, fn($qq) => $qq->where('entities.report_type', $reportType))
             ->when(!empty($categoryIds), fn($qq) => $qq->whereIn('entities.category_id', $categoryIds));
+
         $this->applyDateRangeTypeFilter($q, $dateRangeType);
+
         if ($dateFrom) {
             $q->where('audits.date', '>=', $dateFrom);
         }
+
         if ($dateTo) {
             $q->where('audits.date', '<=', $dateTo);
+        }
+
+        if ($forceEmptyEntities) {
+            $q->whereRaw('1 = 0');
+        } elseif ($selectedEntityIds !== null) {
+            $q->whereIn('entities.id', $selectedEntityIds);
         }
 
         if ($ratingId !== null) {
@@ -921,19 +979,6 @@ class CameraReportController extends Controller
                 ->all();
 
             $q->whereIn('stores.id', $eligibleStoreIds ?: [-1]);
-        }
-        // update here
-        if ($customReportId) {
-            $selectedEntityIds = DB::table('custom_report_entities')
-                ->where('custom_report_id', $customReportId)
-                ->pluck('entity_id')
-                ->toArray();
-
-            if (!empty($selectedEntityIds)) {
-                $q->whereIn('entities.id', $selectedEntityIds);
-            } else {
-                $q->whereRaw('1 = 0');
-            }
         }
 
         return $q->get();
