@@ -20,7 +20,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use App\Models\Category;
-
+use App\Models\CustomReport;
 class CameraReportController extends Controller
 {
     protected ScoringService $scoringService;
@@ -67,11 +67,13 @@ class CameraReportController extends Controller
             'groups' => $groups,
             'ratings' => $ratings,
             'categories' => $categories, // ADD
+            'custom_reports' => CustomReport::select('id', 'name')->orderBy('name')->get(),
             'filters' => $request->only([
                 'store_id',
                 'group',
                 'report_type',
                 'date_from',
+                'custom_report_id', // ADD
                 'date_to',
                 'rating_id',
                 'category_ids', // ADD
@@ -511,6 +513,7 @@ class CameraReportController extends Controller
         $categoryIds = $request->input('category_ids');
         $ratingId = ($ratingId !== null && $ratingId !== '') ? (int) $ratingId : null;
         $dateRangeType = $request->input('date_range_type'); // 'weekly', 'daily', or null
+        $customReportId = $request->input('custom_report_id');
 
         $allowedStoreIds = $user->allowedStoreIdsCached();
         $categoryIds = is_array($categoryIds) ? array_filter($categoryIds) : [];
@@ -547,7 +550,19 @@ class CameraReportController extends Controller
             $cameraFormsBase->where('audits.date', '<=', $dateTo);
 
         $this->applyDateRangeTypeFilter($cameraFormsBase, $dateRangeType);
+        if ($customReportId) {
+            $selectedEntityIds = DB::table('custom_report_entities')
+                ->where('custom_report_id', $customReportId)
+                ->pluck('entity_id')
+                ->toArray();
 
+            if (empty($selectedEntityIds)) {
+                $cameraFormsBase->whereRaw('1 = 0');
+            } else {
+                $cameraFormsBase->whereIn('entities.id', $selectedEntityIds);
+            }
+            // ========================
+        }
         /**
          * Rating filter behavior:
          * - Only include STORES that have at least one row with rating_id = X
@@ -571,6 +586,11 @@ class CameraReportController extends Controller
          * 2) Entities list (for frontend)
          */
         $entitiesQuery = Entity::with('category');
+        if ($customReportId) {
+            $entitiesQuery->whereHas('customReports', function ($q) use ($customReportId) {
+                $q->where('custom_report_id', $customReportId);
+            });
+        }
         if (!empty($categoryIds)) {
             $entitiesQuery->whereIn('category_id', $categoryIds);
         }
@@ -764,6 +784,7 @@ class CameraReportController extends Controller
         $categoryIds = $request->input('category_ids');
         $categoryIds = is_array($categoryIds) ? array_filter($categoryIds) : [];
         $allowedStoreIds = $user->allowedStoreIdsCached();
+        $customReportId = $request->input('custom_report_id');
         $dateRangeType = $request->input('date_range_type');
         $q = DB::table('camera_form_note_attachments as a')
             ->join('camera_form_notes as n', 'n.id', '=', 'a.camera_form_note_id')
@@ -802,7 +823,18 @@ class CameraReportController extends Controller
 
             $q->whereIn('stores.id', $eligibleStoreIds ?: [-1]);
         }
+        if ($customReportId) {
+            $selectedEntityIds = DB::table('custom_report_entities')
+                ->where('custom_report_id', $customReportId)
+                ->pluck('entity_id')
+                ->toArray();
 
+            if (!empty($selectedEntityIds)) {
+                $q->whereIn('entities.id', $selectedEntityIds);
+            } else {
+                $q->whereRaw('1 = 0');
+            }
+        }
         return $q->get();
     }
 
