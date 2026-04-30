@@ -222,10 +222,10 @@ class AuditController extends Controller
             !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_end)
         ) {
             return response()->json([
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => 'Invalid date format. Use yyyy-mm-dd',
-                'data'    => null,
-                'errors'  => ['date' => ['Date must be in yyyy-mm-dd format']],
+                'data' => null,
+                'errors' => ['date' => ['Date must be in yyyy-mm-dd format']],
             ], 422);
         }
 
@@ -234,20 +234,20 @@ class AuditController extends Controller
 
         if (!$store) {
             return response()->json([
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => 'Store not found',
-                'data'    => null,
-                'errors'  => ['store' => ['Store code not found']],
+                'data' => null,
+                'errors' => ['store' => ['Store code not found']],
             ], 404);
         }
 
         // 🔹 Authorization check (uses numeric ID)
-        if (!$user->canAccessStoreId((int)$store->id)) {
+        if (!$user->canAccessStoreId((int) $store->id)) {
             return response()->json([
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => 'Forbidden',
-                'data'    => null,
-                'errors'  => ['store' => ['You do not have access to this store']],
+                'data' => null,
+                'errors' => ['store' => ['You do not have access to this store']],
             ], 403);
         }
 
@@ -258,13 +258,14 @@ class AuditController extends Controller
             entities.entity_label,
             SUM(CASE WHEN camera_forms.rating_id = 5 THEN 1 ELSE 0 END) as auto_fail_count,
             SUM(CASE WHEN camera_forms.rating_id = 6 THEN 1 ELSE 0 END) as urgent_count,
+            SUM(CASE WHEN camera_forms.rating_id = 2 THEN 1 ELSE 0 END) as fail_count,
             COUNT(camera_forms.id) as total_count
         ")
             ->join('audits', 'camera_forms.audit_id', '=', 'audits.id')
             ->join('entities', 'camera_forms.entity_id', '=', 'entities.id')
             ->where('audits.store_id', $store->id) // ✅ numeric ID match
             ->whereBetween('audits.date', [$date_start, $date_end])
-            ->whereIn('camera_forms.rating_id', [5, 6])
+            ->whereIn('camera_forms.rating_id', [2, 5, 6])
             ->where('entities.active', true) // ✅ only active entities
             ->groupBy('entities.id', 'entities.entity_label')
             ->orderByDesc('total_count')
@@ -284,30 +285,30 @@ class AuditController extends Controller
     private function success(string $message, $data = null, int $code = 200)
     {
         return response()->json([
-            'status'  => 'success',
+            'status' => 'success',
             'message' => $message,
-            'data'    => $data,
-            'errors'  => null,
+            'data' => $data,
+            'errors' => null,
         ], $code);
     }
 
     private function unauthorized()
     {
         return response()->json([
-            'status'  => 'error',
+            'status' => 'error',
             'message' => 'Unauthorized',
-            'data'    => null,
-            'errors'  => null,
+            'data' => null,
+            'errors' => null,
         ], 401);
     }
 
     private function forbidden()
     {
         return response()->json([
-            'status'  => 'error',
+            'status' => 'error',
             'message' => 'Forbidden',
-            'data'    => null,
-            'errors'  => null,
+            'data' => null,
+            'errors' => null,
         ], 403);
     }
 }
