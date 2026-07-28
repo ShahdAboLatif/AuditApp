@@ -6,6 +6,10 @@ $authSubject = $devMode
     ? 'auth.testing.v1.>'
     : 'auth.v1.>';
 
+$hiringSubject = $devMode
+    ? 'hiring.testing.v1.>'
+    : 'hiring.v1.>';
+
 $qaSubject = $devMode
     ? 'qa.testing.v1.>'
     : 'qa.v1.>';
@@ -40,12 +44,12 @@ return [
             'filter_subject' => $authSubject, // match your stream subjects
         ],
 
-        // Example additional stream later:
-        // [
-        //   'name' => env('NATS_PROJECT_STREAM', 'PROJECT_EVENTS'),
-        //   'durable' => env('NATS_PROJECT_DURABLE', 'QA_PROJECT_CONSUMER'),
-        //   'filter_subject' => 'project.v1.>',
-        // ],
+        // EMPLOYEES from HiringPizza
+        [
+            'name' => $devMode ? env('NATS_HIRING_STREAM', 'HIRING_TESTING_EVENTS') : env('NATS_HIRING_STREAM', 'HIRING_EVENTS'),
+            'durable' => $devMode ? env('NATS_HIRING_DURABLE', 'QA_HIRING_TESTING_CONSUMER') : env('NATS_HIRING_DURABLE', 'QA_HIRING_CONSUMER'),
+            'filter_subject' => $hiringSubject,
+        ],
     ],
 
     'pull' => [
