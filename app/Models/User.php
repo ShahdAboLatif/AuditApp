@@ -83,7 +83,9 @@ class User extends Authenticatable
                 ->all();
         }
 
-        $cache = Cache::store('redis');
+        // Use the app's default cache store (CACHE_STORE, e.g. database) so Redis
+        // is not a hard dependency. Switch CACHE_STORE to redis in prod if desired.
+        $cache = Cache::store();
         $key = "qa:allowed_store_ids:user:{$this->id}";
 
         return $cache->remember($key, $ttlSeconds, function () {
