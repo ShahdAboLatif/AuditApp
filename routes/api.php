@@ -48,6 +48,8 @@ Route::middleware([
         Route::get('tasks', [CleaningTaskController::class, 'index'])->name('cleaning.tasks.index');
         Route::post('tasks', [CleaningTaskController::class, 'store'])->name('cleaning.tasks.store');
         Route::get('tasks/{task}', [CleaningTaskController::class, 'show'])->name('cleaning.tasks.show');
+        Route::put('tasks/{task}', [CleaningTaskController::class, 'update'])->name('cleaning.tasks.update');
+        Route::delete('tasks/{task}', [CleaningTaskController::class, 'destroy'])->name('cleaning.tasks.destroy');
 
         // Store-scoped "what's due" — computed on read. Store id in the PATH (must be {store_id}).
         Route::get('stores/{store_id}/dates/{date}/due', [CleaningDueController::class, 'dueOnDate'])->name('cleaning.due.date');

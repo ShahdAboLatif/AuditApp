@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Cleaning;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Cleaning\StoreCleaningTaskRequest;
+use App\Http\Requests\Cleaning\UpdateCleaningTaskRequest;
 use App\Models\CleaningTask;
 use App\Services\Cleaning\ManagerRecipientResolver;
 use App\Services\Nats\OutboxService;
@@ -91,5 +92,47 @@ class CleaningTaskController extends Controller
         });
 
         return response()->json(['data' => $task->load('stores:id,store')], 201);
+    }
+
+    /**
+     * Update a task's rule / name / stores. Only provided fields change.
+     * photo_required is re-derived from frequency (never taken from the client).
+     * No occurrences to regenerate — status is computed on read.
+     */
+    public function update(UpdateCleaningTaskRequest $request, CleaningTask $task): JsonResponse
+    {
+        $data = $request->validated();
+
+        DB::transaction(function () use ($task, $data) {
+            $fields = collect($data)->except('store_ids')->all();
+
+            if (array_key_exists('frequency', $fields)) {
+                $fields['photo_required'] = CleaningTask::photoRequiredFor($fields['frequency']);
+                $fields['interval_hours'] = $fields['frequency'] === 'hourly'
+                    ? ($data['interval_hours'] ?? $task->interval_hours)
+                    : null;
+            }
+
+            if (!empty($fields)) {
+                $task->update($fields);
+            }
+
+            if (array_key_exists('store_ids', $data)) {
+                $task->stores()->sync($data['store_ids']);
+            }
+        });
+
+        return response()->json(['data' => $task->fresh()->load('stores:id,store')]);
+    }
+
+    /**
+     * Soft-delete a task: it disappears from the Due list, but its completions
+     * and history are preserved (and past evaluations keep working).
+     */
+    public function destroy(CleaningTask $task): JsonResponse
+    {
+        $task->delete();
+
+        return response()->json(['deleted' => true]);
     }
 }
