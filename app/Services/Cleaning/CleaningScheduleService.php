@@ -44,7 +44,8 @@ class CleaningScheduleService
         $d = $date->copy()->startOfDay();
 
         return match ($task->frequency) {
-            'weekly'  => [$d->copy()->startOfWeek(Carbon::MONDAY), $d->copy()->startOfWeek(Carbon::MONDAY)->addDays(6)],
+            // Weekly period runs Tuesday → Monday (7 days).
+            'weekly'  => [$d->copy()->startOfWeek(Carbon::TUESDAY), $d->copy()->startOfWeek(Carbon::TUESDAY)->addDays(6)],
             'monthly' => [$d->copy()->startOfMonth(), $d->copy()->endOfMonth()],
             default   => [$d->copy(), $d->copy()], // daily / hourly = that single day
         };
@@ -52,8 +53,8 @@ class CleaningScheduleService
 
     private function weeklyDue(CleaningTask $task, Carbon $d, Carbon $start, int $n): bool
     {
-        $ws = $start->copy()->startOfWeek(Carbon::MONDAY);
-        $wd = $d->copy()->startOfWeek(Carbon::MONDAY);
+        $ws = $start->copy()->startOfWeek(Carbon::TUESDAY);
+        $wd = $d->copy()->startOfWeek(Carbon::TUESDAY);
         $weeks = intdiv((int) $ws->diffInDays($wd), 7);
 
         if ($weeks % $n !== 0) {

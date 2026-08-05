@@ -209,7 +209,14 @@
       <!-- CREATE TASK -->
       <section id="v-create" class="hidden">
         <div class="card">
-          <div class="hd"><h3>Create Task</h3></div>
+          <div class="hd"><h3>Existing tasks</h3><div class="spacer"></div><button class="btn sm" onclick="loadTasks()">↻ Refresh</button></div>
+          <table>
+            <thead><tr><th>Name</th><th>Frequency</th><th>Stores</th><th>Starts</th><th></th></tr></thead>
+            <tbody id="taskList"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="hd"><h3 id="createTitle">Create Task</h3></div>
           <div class="form-grid">
             <div class="field"><label>Task name <span class="req">*</span></label><input id="cName" placeholder="e.g. Clean the oven"></div>
             <div class="field"><label>Weight <span class="hint">(0–100)</span></label><input id="cWeight" type="number" min="0" max="100" placeholder="20"></div>
@@ -227,7 +234,7 @@
             <div class="field full"><label>Assign to store ids <span class="req">*</span> <span class="hint">(comma separated)</span></label><input id="cStores" value="1"></div>
             <div class="field full"><label>Attachment on completion</label><div class="note" id="attNote" style="margin:0">Required (daily/weekly/monthly).</div></div>
           </div>
-          <div class="form-foot"><button class="btn" onclick="go('tasks')">Cancel</button><button class="btn pri" onclick="createTask()">Create task</button></div>
+          <div class="form-foot"><button class="btn" id="cancelEditBtn" style="display:none" onclick="cancelEdit()">Cancel edit</button><button class="btn" onclick="go('tasks')">Close</button><button class="btn pri" id="saveTaskBtn" onclick="saveTask()">Create task</button></div>
         </div>
       </section>
 
@@ -394,21 +401,65 @@ async function saveComplete(){
   else{$('#cmpError').textContent=briefErr(r.data);}
 }
 
-/* ---------------- CREATE TASK ---------------- */
-let FREQ='daily';
-$$('#freqSeg button').forEach(b=>b.onclick=()=>{$$('#freqSeg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');FREQ=b.dataset.f;
+/* ---------------- CREATE / EDIT / DELETE TASK ---------------- */
+let FREQ='daily', EDIT_ID=null, TASKS=[];
+function setFreq(f){ FREQ=f; $$('#freqSeg button').forEach(x=>x.classList.toggle('on',x.dataset.f===f));
   $('#intervalRow').classList.toggle('hide',FREQ!=='hourly');
-  $('#attNote').textContent=FREQ==='hourly'?'Optional for hourly tasks.':'Required (daily/weekly/monthly).';});
-async function createTask(){
+  $('#attNote').textContent=FREQ==='hourly'?'Optional for hourly tasks.':'Required (daily/weekly/monthly).'; }
+$$('#freqSeg button').forEach(b=>b.onclick=()=>setFreq(b.dataset.f));
+
+async function loadTasks(){
+  const r=await api('GET','/cleaning/tasks');
+  TASKS=(r.data&&r.data.data)||[];
+  $('#taskList').innerHTML = TASKS.length ? TASKS.map(t=>{
+    const stores=(t.stores||[]).map(s=>s.id).join(', ');
+    return `<tr>
+      <td><div class="taskname">${t.name}<small>${t.description||''}</small></div></td>
+      <td><span class="freq">${t.frequency}${t.frequency==='hourly'&&t.interval_hours?(' /'+t.interval_hours+'h'):''}</span></td>
+      <td>${stores||'—'}</td>
+      <td>${(t.starts_at||'').slice(0,10)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn link" onclick="editTask(${t.id})">Edit</button>
+        <button class="btn link" style="color:var(--fail)" onclick="deleteTask(${t.id})">Delete</button>
+      </td></tr>`;
+  }).join('') : `<tr><td colspan="5" class="rolegate">No tasks yet.</td></tr>`;
+}
+function editTask(id){
+  const t=TASKS.find(x=>x.id===id); if(!t)return;
+  EDIT_ID=id;
+  $('#cName').value=t.name||''; $('#cDesc').value=t.description||''; $('#cWeight').value=t.weight??'';
+  setFreq(t.frequency||'daily'); $('#cInterval').value=t.interval_hours||2;
+  $('#cStart').value=(t.starts_at||'').slice(0,10); $('#cEnd').value=(t.ends_at||'').slice(0,10);
+  $('#cStores').value=(t.stores||[]).map(s=>s.id).join(',');
+  $('#createTitle').textContent='Edit Task #'+id;
+  $('#saveTaskBtn').textContent='Update task';
+  $('#cancelEditBtn').style.display='';
+  window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+}
+function cancelEdit(){
+  EDIT_ID=null;
+  $('#cName').value='';$('#cDesc').value='';$('#cWeight').value='';setFreq('daily');
+  $('#cEnd').value='';$('#createTitle').textContent='Create Task';$('#saveTaskBtn').textContent='Create task';$('#cancelEditBtn').style.display='none';
+}
+async function deleteTask(id){
+  if(!confirm('Soft-delete this task? (history is kept, it disappears from Due)'))return;
+  const r=await api('DELETE','/cleaning/tasks/'+id);
+  if(r.ok){toast('Task deleted');loadTasks();}
+}
+async function saveTask(){
   const body={name:$('#cName').value,description:$('#cDesc').value||null,
     weight:$('#cWeight').value?Number($('#cWeight').value):null,
-    frequency:FREQ,
-    interval:1,
+    frequency:FREQ, interval:1,
     interval_hours:FREQ==='hourly'?Number($('#cInterval').value):null,
     starts_at:$('#cStart').value, ends_at:$('#cEnd').value||null,
     store_ids:$('#cStores').value.split(',').map(s=>Number(s.trim())).filter(Boolean)};
-  const r=await api('POST','/cleaning/tasks',{body});
-  if(r.status===201){toast('Task created ✓');go('tasks');loadDue();}
+  if(EDIT_ID){
+    const r=await api('PUT','/cleaning/tasks/'+EDIT_ID,{body});
+    if(r.ok){toast('Task updated ✓');cancelEdit();loadTasks();}
+  }else{
+    const r=await api('POST','/cleaning/tasks',{body});
+    if(r.status===201){toast('Task created ✓');loadTasks();loadDue();}
+  }
 }
 
 /* ---------------- EVALUATION ---------------- */
@@ -530,7 +581,7 @@ const TITLES={tasks:'Tasks',create:'Create Task',eval:'Evaluation'};
 function go(view){$$('.main section').forEach(s=>s.classList.add('hidden'));$('#v-'+view).classList.remove('hidden');
   $$('#ccSub button').forEach(b=>b.classList.toggle('on',b.dataset.view===view));
   $('#pageTitle').textContent=TITLES[view];$('#crumb').textContent=TITLES[view];
-  if(view==='tasks')loadDue(); if(view==='eval')loadEval();}
+  if(view==='tasks')loadDue(); if(view==='eval')loadEval(); if(view==='create')loadTasks();}
 $$('#ccSub button').forEach(b=>b.onclick=()=>go(b.dataset.view));
 const META={manager:{name:'Store Manager',role:'own store',av:'SM'},audit:{name:'Auditor',role:'all stores',av:'AU'},super:{name:'Super Admin',role:'full',av:'SA'}};
 function applyRole(){const r=$('#role').value,m=META[r];$('#whoName').textContent=m.name;$('#whoRole').textContent=m.role;$('#avatar').textContent=m.av;
