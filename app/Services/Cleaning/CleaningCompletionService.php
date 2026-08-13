@@ -4,6 +4,7 @@ namespace App\Services\Cleaning;
 
 use App\Models\CleaningCompletion;
 use App\Models\CleaningTask;
+use App\Services\Nats\EventFactory;
 use App\Services\Nats\OutboxService;
 use Carbon\CarbonInterface;
 use Illuminate\Http\UploadedFile;
@@ -19,6 +20,7 @@ use Illuminate\Validation\ValidationException;
 class CleaningCompletionService
 {
     public function __construct(
+        private readonly EventFactory $events,
         private readonly OutboxService $outbox,
         private readonly CleaningScheduleService $schedule,
     ) {
@@ -26,6 +28,7 @@ class CleaningCompletionService
 
     /**
      * @param  int[]  $employeeIds
+     * @param  UploadedFile[]  $photos
      */
     public function complete(
         CleaningTask $task,
@@ -33,7 +36,7 @@ class CleaningCompletionService
         CarbonInterface $date,
         array $employeeIds,
         ?string $note,
-        ?UploadedFile $photo,
+        array $photos,
         ?int $completedByUserId
     ): CleaningCompletion {
         // Rule 1: at least one employee.
@@ -52,14 +55,14 @@ class CleaningCompletionService
             ->first();
 
         // Rule 2: photo required for daily/weekly/monthly, optional for hourly.
-        $hasPhoto = $photo !== null || ($existing && $existing->attachments()->exists());
+        $hasPhoto = !empty($photos) || ($existing && $existing->attachments()->exists());
         if ($task->photo_required && !$hasPhoto) {
             throw ValidationException::withMessages([
-                'photo' => 'A photo is required for this task before it can be marked done.',
+                'photos' => 'At least one photo is required for this task before it can be marked done.',
             ]);
         }
 
-        return DB::transaction(function () use ($task, $storeId, $periodStart, $periodEnd, $employeeIds, $note, $photo, $completedByUserId, $existing) {
+        return DB::transaction(function () use ($task, $storeId, $periodStart, $periodEnd, $employeeIds, $note, $photos, $completedByUserId, $existing) {
             $completion = $existing ?: new CleaningCompletion([
                 'cleaning_task_id' => $task->id,
                 'store_id'         => $storeId,
@@ -72,22 +75,28 @@ class CleaningCompletionService
             $completion->note = $note;
             $completion->save();
 
-            if ($photo !== null) {
+            foreach ($photos as $photo) {
                 $completion->attachments()->create(['path' => $photo->store('cleaning', 'public')]);
             }
 
             $completion->employees()->sync($employeeIds);
 
-            $this->outbox->record('qa.v1.cleaning.task.completed', [
-                'completion_id' => $completion->id,
-                'task_id'       => $task->id,
-                'task_name'     => $task->name,
-                'store_id'      => $storeId,
-                'period'        => [$periodStart->toDateString(), $periodEnd->toDateString()],
-                'employee_ids'  => array_values($employeeIds),
-                'has_photo'     => $completion->attachments()->exists(),
-                'completed_at'  => $completion->completed_at?->toIso8601String(),
+
+            // Ask NotificationsPizza to actually deliver — it resolves the
+            // QA auditors itself from role + store. A completed task needs to
+            // be verified by an auditor, not the store manager. Channels: 'web' = in-app.
+            $envelope = $this->events->make('notifications.v1.notification.role.send', [
+                'channels' => ['web'],
+                'roles'    => array_values((array) config('cleaning.auditor_roles', ['QA Auditor'])),
+                'stores'   => [$storeId],
+                'payload'  => [
+                    'type'       => 'cleaning_task_completed',
+                    'title'      => 'Task completed',
+                    'body'       => "\"{$task->name}\" has been marked as done.",
+                    'action_url' => "/cleaning/tasks/{$task->id}?store_id={$storeId}",
+                ],
             ]);
+            $this->outbox->record('notifications.v1.notification.role.send', $envelope);
 
             return $completion->fresh(['employees', 'attachments', 'task']);
         });

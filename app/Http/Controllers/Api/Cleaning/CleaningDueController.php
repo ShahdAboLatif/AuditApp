@@ -61,7 +61,8 @@ class CleaningDueController extends Controller
             'employee_ids'   => ['required', 'array', 'min:1'],
             'employee_ids.*' => ['integer', 'exists:employees,id'],
             'note'           => ['nullable', 'string'],
-            'photo'          => ['nullable', 'file', 'image', 'max:10240'],
+            'photos'         => ['nullable', 'array'],
+            'photos.*'       => ['file', 'image', 'max:10240'],
         ]);
 
         $completion = $this->completion->complete(
@@ -70,7 +71,7 @@ class CleaningDueController extends Controller
             isset($v['date']) ? Carbon::parse($v['date']) : now(),
             $v['employee_ids'],
             $v['note'] ?? null,
-            $request->file('photo'),
+            $request->file('photos') ?? [],
             $request->user()?->id,
         );
 

@@ -8,6 +8,15 @@ return [
     */
     'manager_roles' => array_filter(array_map('trim', explode(
         ',',
-        env('CLEANING_MANAGER_ROLES', 'store_manager,qa_store_manager')
+        env('CLEANING_MANAGER_ROLES', 'Store Manager')
+    ))),
+
+    /*
+    | Role names that identify a QA Auditor — used to decide who gets notified
+    | when a task is marked as completed (they need to come verify it).
+    */
+    'auditor_roles' => array_filter(array_map('trim', explode(
+        ',',
+        env('CLEANING_AUDITOR_ROLES', 'QA Auditor')
     ))),
 ];
