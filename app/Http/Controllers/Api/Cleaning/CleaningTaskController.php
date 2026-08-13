@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Cleaning\StoreCleaningTaskRequest;
 use App\Http\Requests\Cleaning\UpdateCleaningTaskRequest;
 use App\Models\CleaningTask;
-use App\Services\Cleaning\ManagerRecipientResolver;
+use App\Services\Nats\EventFactory;
 use App\Services\Nats\OutboxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\DB;
 class CleaningTaskController extends Controller
 {
     public function __construct(
+        private readonly EventFactory $events,
         private readonly OutboxService $outbox,
-        private readonly ManagerRecipientResolver $recipients,
     ) {
     }
 
@@ -65,28 +65,22 @@ class CleaningTaskController extends Controller
 
             $task->stores()->sync($data['store_ids']);
 
-            // 1) QA domain event (audit trail / other QA consumers).
-            $notifyUserIds = $this->recipients->forStores($data['store_ids']);
-            $this->outbox->record('qa.v1.cleaning.task.created', [
-                'task_id'         => $task->id,
-                'task_name'       => $task->name,
-                'frequency'       => $task->frequency,
-                'store_ids'       => array_values($data['store_ids']),
-                'notify_user_ids' => $notifyUserIds,
-                'message'         => "New task \"{$task->name}\" assigned to your store.",
-            ]);
+          
 
             // 2) Ask NotificationsPizza to actually deliver — it resolves the
             //    store managers itself from role + store. Channels: 'web' = in-app.
-            $this->outbox->record('notifications.v1.notification.role.send', [
+            $envelope = $this->events->make('notifications.v1.notification.role.send', [
                 'channels' => ['web'],
-                'roles'    => array_values((array) config('cleaning.manager_roles', ['store_manager'])),
+                'roles'    => array_values((array) config('cleaning.manager_roles', ['Store Manager'])),
                 'stores'   => array_values($data['store_ids']),
                 'payload'  => [
-                    'title' => 'New cleaning task',
-                    'body'  => "\"{$task->name}\" assigned to your store.",
+                    'type'       => 'cleaning_task_created',
+                    'title'      => 'New cleaning task',
+                    'body'       => "\"{$task->name}\" assigned to your store.",
+                    'action_url' => "/cleaning/tasks/{$task->id}",
                 ],
             ]);
+            $this->outbox->record('notifications.v1.notification.role.send', $envelope);
 
             return $task;
         });

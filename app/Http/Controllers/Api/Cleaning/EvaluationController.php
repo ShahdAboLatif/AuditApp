@@ -10,6 +10,7 @@ use App\Models\EvaluationItemValue;
 use App\Models\Store;
 use App\Services\Cleaning\EvaluationService;
 use App\Services\Cleaning\ManagerRecipientResolver;
+use App\Services\Nats\EventFactory;
 use App\Services\Nats\OutboxService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class EvaluationController extends Controller
 {
     public function __construct(
         private readonly EvaluationService $evaluations,
+        private readonly EventFactory $events,
         private readonly OutboxService $outbox,
         private readonly ManagerRecipientResolver $recipients,
     ) {
@@ -61,28 +63,37 @@ class EvaluationController extends Controller
             // chart:
             'cleaning_task_id' => ['required_if:kind,chart', 'integer', 'exists:cleaning_tasks,id'],
             'verdict'          => ['required_if:kind,chart', Rule::in(['pass', 'fail', 'auto_fail'])],
+            // optional on both kinds — the auditor's written notice + proof photos:
+            'note'     => ['nullable', 'string'],
+            'images'   => ['nullable', 'array'],
+            'images.*' => ['file', 'image', 'max:10240'],
         ]);
 
         $this->assertCanAccess($request, (int) $data['store_id']);
         $periodType = $data['period_type'] ?? 'week';
+        $images = $request->file('images') ?? [];
 
-        DB::transaction(function () use ($data, $periodType) {
+        DB::transaction(function () use ($data, $periodType, $images) {
             $evaluation = Evaluation::firstOrCreate(
                 ['store_id' => $data['store_id'], 'period_type' => $periodType, 'period_key' => $data['period_key']],
                 ['created_by' => Auth::id()],
             );
 
             if ($data['kind'] === 'item') {
-                EvaluationItemValue::updateOrCreate(
+                $cell = EvaluationItemValue::updateOrCreate(
                     ['evaluation_id' => $evaluation->id, 'inspection_item_id' => $data['inspection_item_id']],
-                    ['value' => $data['value']],
+                    ['value' => $data['value'], 'note' => $data['note'] ?? null],
                 );
             } else {
                 $task = CleaningTask::findOrFail($data['cleaning_task_id']);
-                EvaluationChartVerdict::updateOrCreate(
+                $cell = EvaluationChartVerdict::updateOrCreate(
                     ['evaluation_id' => $evaluation->id, 'cleaning_task_id' => $task->id],
-                    ['frequency' => $task->frequency, 'weight' => (int) ($task->weight ?? 0), 'verdict' => $data['verdict']],
+                    ['frequency' => $task->frequency, 'weight' => (int) ($task->weight ?? 0), 'verdict' => $data['verdict'], 'note' => $data['note'] ?? null],
                 );
+            }
+
+            foreach ($images as $image) {
+                $cell->attachments()->create(['path' => $image->store('cleaning-evaluations', 'public')]);
             }
         });
 
@@ -108,15 +119,31 @@ class EvaluationController extends Controller
 
         $row = $this->evaluations->buildGrid($periodType, $data['period_key'], [(int) $data['store_id']])['rows']->first();
 
-        $this->outbox->record('qa.v1.cleaning.evaluation.completed', [
-            'store_id'        => (int) $data['store_id'],
-            'period_type'     => $periodType,
-            'period_key'      => $data['period_key'],
-            'item_score'      => $row['item_score'] ?? null,
-            'chart_score'     => $row['chart_score'] ?? null,
-            'notify_user_ids' => $this->recipients->forStores([(int) $data['store_id']]),
-            'message'         => 'Your store evaluation is ready.',
+        $notifyUserIds = $this->recipients->forStores([(int) $data['store_id']]);
+
+        // Ask NotificationsPizza to actually deliver — it resolves the
+        // store managers itself from role + store (same pattern as
+        // CleaningTaskController@store). Channels: 'web' = in-app.
+        // The full evaluation context travels in `payload` so it lands in
+        // NotificationsPizza's in_app_notifications.data for whoever reads it.
+        $envelope = $this->events->make('notifications.v1.notification.role.send', [
+            'channels' => ['web'],
+            'roles'    => array_values((array) config('cleaning.manager_roles', ['Store Manager'])),
+            'stores'   => [(int) $data['store_id']],
+            'payload'  => [
+                'type'            => 'cleaning_evaluation_ready',
+                'title'           => 'Store evaluation ready',
+                'body'            => "Your store evaluation for {$periodType} {$data['period_key']} is ready — item score {$row['item_score']}%, chart score {$row['chart_score']}%.",
+                'action_url'      => "/cleaning/evaluations?store_id={$data['store_id']}&period_type={$periodType}&period_key={$data['period_key']}",
+                'store_id'        => (int) $data['store_id'],
+                'period_type'     => $periodType,
+                'period_key'      => $data['period_key'],
+                'item_score'      => $row['item_score'] ?? null,
+                'chart_score'     => $row['chart_score'] ?? null,
+                'notify_user_ids' => $notifyUserIds,
+            ],
         ]);
+        $this->outbox->record('notifications.v1.notification.role.send', $envelope);
 
         return response()->json(['data' => $row]);
     }

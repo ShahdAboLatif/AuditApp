@@ -30,7 +30,7 @@ class EvaluationService
         $stores = Store::query()->whereIn('id', $storeIds)->orderBy('id')->get(['id', 'store']);
 
         $rows = $stores->map(function (Store $store) use ($items, $periodType, $periodKey) {
-            $evaluation = Evaluation::with(['itemValues', 'chartVerdicts'])
+            $evaluation = Evaluation::with(['itemValues.attachments', 'chartVerdicts.attachments'])
                 ->where('store_id', $store->id)
                 ->where('period_type', $periodType)
                 ->where('period_key', $periodKey)
@@ -42,10 +42,18 @@ class EvaluationService
                 : collect();
 
             $itemValues = [];
+            $plainItemValues = []; // scalar copy, used only for scoring
             foreach ($items as $item) {
-                $itemValues[$item->name] = $valueByItem->get($item->id)->value ?? 'empty';
+                $cell = $valueByItem->get($item->id);
+                $value = $cell->value ?? 'empty';
+                $plainItemValues[$item->name] = $value;
+                $itemValues[$item->name] = [
+                    'value'  => $value,
+                    'note'   => $cell->note ?? null,
+                    'photos' => $cell ? $cell->attachments->map(fn ($a) => '/storage/' . $a->path)->values() : [],
+                ];
             }
-            $itemScore = $this->scoring->itemScore(array_values($itemValues));
+            $itemScore = $this->scoring->itemScore(array_values($plainItemValues));
 
             // --- Group B: chart tasks grouped by frequency ---
             $verdictByTask = $evaluation
@@ -67,6 +75,8 @@ class EvaluationService
                     'name'    => $task->name,
                     'weight'  => $weight,
                     'verdict' => $verdict,
+                    'note'    => $v->note ?? null,
+                    'photos'  => $v ? $v->attachments->map(fn ($a) => '/storage/' . $a->path)->values() : [],
                 ];
                 $scoreInput[] = ['weight' => $weight, 'verdict' => $verdict];
             }

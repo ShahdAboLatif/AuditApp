@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class EvaluationChartVerdict extends Model
 {
@@ -13,6 +14,7 @@ class EvaluationChartVerdict extends Model
         'frequency',
         'weight',
         'verdict',
+        'note',
     ];
 
     protected $casts = [
@@ -27,5 +29,10 @@ class EvaluationChartVerdict extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(CleaningTask::class, 'cleaning_task_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(EvaluationChartVerdictAttachment::class);
     }
 }
