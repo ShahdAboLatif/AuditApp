@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Cleaning\StoreCleaningTaskRequest;
 use App\Http\Requests\Cleaning\UpdateCleaningTaskRequest;
 use App\Models\CleaningTask;
+use App\Models\Store;
 use App\Services\Nats\EventFactory;
 use App\Services\Nats\OutboxService;
 use Illuminate\Http\JsonResponse;
@@ -69,10 +70,13 @@ class CleaningTaskController extends Controller
 
             // 2) Ask NotificationsPizza to actually deliver — it resolves the
             //    store managers itself from role + store. Channels: 'web' = in-app.
+            //    NotificationsPizza matches `stores` against the shared store code
+            //    (its user_store_roles.store_id holds that code, not our internal id).
+            $storeCodes = Store::query()->whereIn('id', $data['store_ids'])->pluck('store')->all();
             $envelope = $this->events->make('notifications.v1.notification.role.send', [
                 'channels' => ['web'],
                 'roles'    => array_values((array) config('cleaning.manager_roles', ['Store Manager'])),
-                'stores'   => array_values($data['store_ids']),
+                'stores'   => $storeCodes,
                 'payload'  => [
                     'type'       => 'cleaning_task_created',
                     'title'      => 'New cleaning task',

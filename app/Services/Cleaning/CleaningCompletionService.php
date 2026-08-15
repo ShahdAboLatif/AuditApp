@@ -4,6 +4,7 @@ namespace App\Services\Cleaning;
 
 use App\Models\CleaningCompletion;
 use App\Models\CleaningTask;
+use App\Models\Store;
 use App\Services\Nats\EventFactory;
 use App\Services\Nats\OutboxService;
 use Carbon\CarbonInterface;
@@ -85,15 +86,18 @@ class CleaningCompletionService
             // Ask NotificationsPizza to actually deliver — it resolves the
             // QA auditors itself from role + store. A completed task needs to
             // be verified by an auditor, not the store manager. Channels: 'web' = in-app.
+            // `stores` must be the shared store code — NotificationsPizza's
+            // user_store_roles.store_id holds that code, not our internal id.
+            $storeCode = Store::query()->whereKey($storeId)->value('store');
             $envelope = $this->events->make('notifications.v1.notification.role.send', [
                 'channels' => ['web'],
                 'roles'    => array_values((array) config('cleaning.auditor_roles', ['QA Auditor'])),
-                'stores'   => [$storeId],
+                'stores'   => [$storeCode],
                 'payload'  => [
                     'type'       => 'cleaning_task_completed',
                     'title'      => 'Task completed',
                     'body'       => "\"{$task->name}\" has been marked as done.",
-                    'action_url' => "/cleaning/tasks/{$task->id}?store_id={$storeId}",
+                    'action_url' => "/cleaning/tasks/{$task->id}?" . http_build_query(['store' => $storeCode]),
                 ],
             ]);
             $this->outbox->record('notifications.v1.notification.role.send', $envelope);

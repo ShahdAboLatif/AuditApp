@@ -120,22 +120,25 @@ class EvaluationController extends Controller
         $row = $this->evaluations->buildGrid($periodType, $data['period_key'], [(int) $data['store_id']])['rows']->first();
 
         $notifyUserIds = $this->recipients->forStores([(int) $data['store_id']]);
+        $storeCode = Store::query()->whereKey($data['store_id'])->value('store');
 
         // Ask NotificationsPizza to actually deliver — it resolves the
         // store managers itself from role + store (same pattern as
         // CleaningTaskController@store). Channels: 'web' = in-app.
         // The full evaluation context travels in `payload` so it lands in
         // NotificationsPizza's in_app_notifications.data for whoever reads it.
+        // `stores` must be the shared store code — NotificationsPizza's
+        // user_store_roles.store_id holds that code, not our internal id.
         $envelope = $this->events->make('notifications.v1.notification.role.send', [
             'channels' => ['web'],
             'roles'    => array_values((array) config('cleaning.manager_roles', ['Store Manager'])),
-            'stores'   => [(int) $data['store_id']],
+            'stores'   => [$storeCode],
             'payload'  => [
                 'type'            => 'cleaning_evaluation_ready',
                 'title'           => 'Store evaluation ready',
                 'body'            => "Your store evaluation for {$periodType} {$data['period_key']} is ready — item score {$row['item_score']}%, chart score {$row['chart_score']}%.",
-                'action_url'      => "/cleaning/evaluations?store_id={$data['store_id']}&period_type={$periodType}&period_key={$data['period_key']}",
-                'store_id'        => (int) $data['store_id'],
+                'action_url'      => '/cleaning/evaluations?' . http_build_query(['store' => $storeCode, 'period_type' => $periodType, 'period_key' => $data['period_key']]),
+                'store'           => $storeCode,
                 'period_type'     => $periodType,
                 'period_key'      => $data['period_key'],
                 'item_score'      => $row['item_score'] ?? null,
