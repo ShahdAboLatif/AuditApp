@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cleaning Chart — Live (API)</title>
+<style>
+  :root{
+    --ink:#12211c;--paper:#f6f4ee;--panel:#fff;--line:#dcd8cd;--muted:#6f7a72;
+    --brand:#1f5c4a;--brand-soft:#e6efe9;
+    --pass:#1f7a4d;--pass-bg:#e3f3e9;--fail:#b23a34;--fail-bg:#fbe6e4;
+    --auto:#8a1c58;--auto-bg:#f8e4ef;--pend:#9a7420;--pend-bg:#f7eecf;
+    --radius:10px;--shadow:0 1px 2px rgba(18,33,28,.06),0 8px 24px rgba(18,33,28,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--paper);color:var(--ink);font-size:14px;line-height:1.45}
+  h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:14px}
+  .app{display:flex;min-height:100vh}
+  .side{width:230px;flex-shrink:0;background:var(--ink);color:#dfe6e1;padding:18px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;overflow:auto}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 16px}
+  .brand .dot{width:30px;height:30px;border-radius:8px;background:var(--brand);display:grid;place-items:center;font-weight:700;color:#fff}
+  .brand b{color:#fff;font-size:15px}.brand span{display:block;font-size:11px;color:#8fa79b}
+  .nav>button,.grp>.gh{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;color:#b8c6bd;padding:9px 10px;border-radius:8px;font-size:13.5px;font-weight:500}
+  .grp{margin:2px 0}.grp>.gh{cursor:pointer;font-weight:600;color:#cdd9d0}
+  .grp>.gh .chev{margin-left:auto;font-size:11px;opacity:.7}
+  .grp .sub{display:flex;flex-direction:column;gap:2px;margin:2px 0 4px 12px;padding-left:10px;border-left:1px solid rgba(255,255,255,.1)}
+  .grp .sub button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:0;color:#a9bab0;padding:8px 10px;border-radius:7px;font-size:13px;font-weight:500}
+  .grp .sub button:hover{background:rgba(255,255,255,.06);color:#fff}
+  .grp .sub button.on{background:var(--brand);color:#fff}
+  .side .foot{margin-top:auto;font-size:11px;color:#7d9186;padding:8px}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .top{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:20}
+  .crumb{font-size:12px;color:var(--muted)}.top h2{font-size:17px}
+  .role-box{display:flex;align-items:center;gap:8px}
+  .role-box label{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600}
+  .role-box select{border:1px solid var(--line);border-radius:8px;padding:6px 9px;background:#fff;font-weight:600}
+  .who{display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid var(--line)}
+  .who .av{width:30px;height:30px;border-radius:50%;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-weight:700;font-size:12px}
+  .who small{display:block;color:var(--muted);font-size:11px}.who b{font-size:12.5px}
+  /* connection bar */
+  .conn{background:#0f1a16;color:#cfe0d8;padding:8px 22px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;font-size:12px}
+  .conn .f{display:flex;flex-direction:column;gap:2px}
+  .conn label{font-size:10px;color:#8fb0a3;font-weight:600;text-transform:uppercase}
+  .conn input,.conn select{border:1px solid #2b3d36;background:#0b1512;color:#e6efe9;border-radius:6px;padding:5px 7px;font-size:12px}
+  .conn .dot{width:8px;height:8px;border-radius:50%;background:#b23a34}.conn .dot.ok{background:#3ecb7a}
+  .wrap{padding:22px;max-width:1240px;width:100%}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px}
+  .card .hd{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line)}
+  .card .hd h3{font-size:15px}.spacer{flex:1}
+  .filters{display:flex;gap:8px;flex-wrap:wrap}
+  .filters select,.filters input{border:1px solid var(--line);border-radius:8px;padding:6px 9px;background:#fff}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:11px 14px;border-bottom:1px solid var(--line);background:#faf9f5;white-space:nowrap}
+  td{padding:11px 14px;border-bottom:1px solid #eeece5;vertical-align:middle}
+  tbody tr:hover{background:#faf9f4}
+  .taskname{font-weight:600}.taskname small{display:block;color:var(--muted);font-weight:500;font-size:12px}
+  .freq{font-size:11px;font-weight:600;color:var(--brand);background:var(--brand-soft);padding:2px 8px;border-radius:6px}
+  .st-pill{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .st-pending{color:var(--pend);background:var(--pend-bg)}.st-done{color:var(--pass);background:var(--pass-bg)}.st-failed{color:var(--fail);background:var(--fail-bg)}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 13px;font-weight:600;font-size:13px;color:var(--ink)}
+  .btn:hover{background:#f4f2ec}.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}.btn.pri:hover{background:#194a3c}
+  .btn.sm{padding:5px 10px;font-size:12px}.btn.link{border:0;background:transparent;color:var(--brand);text-decoration:underline;padding:4px 6px}
+  .note{font-size:12.5px;color:var(--muted);background:var(--brand-soft);border-left:3px solid var(--brand);padding:10px 14px;margin:12px 18px 0;border-radius:0 8px 8px 0}
+  .win{font-size:12px;color:#4d5a52}.win small{display:block;color:var(--muted);font-size:11px}
+  .assignees{display:flex;gap:4px;flex-wrap:wrap}.assignees .a{font-size:11px;font-weight:600;background:#eef0ec;color:#4d5a52;border-radius:999px;padding:2px 9px}
+  /* eval grid */
+  .matrix-wrap{overflow-x:auto}
+  table.eval-grid{border-collapse:separate;border-spacing:0;font-size:13px}
+  table.eval-grid th,table.eval-grid td{border:1px solid #e6e3d9}
+  table.eval-grid thead th{background:#faf9f5;text-align:center;padding:9px 10px;font-size:11px;white-space:nowrap}
+  table.eval-grid th.store-h,table.eval-grid td.store-c{position:sticky;left:0;z-index:3;text-align:left;min-width:100px}
+  table.eval-grid th.store-h{background:var(--ink);color:#fff}table.eval-grid td.store-c{background:#fff;font-weight:700}
+  .ic{cursor:pointer;text-align:center;font-size:11.5px;font-weight:700;padding:9px 8px;min-width:70px;user-select:none}
+  .ic.pass{color:var(--pass);background:var(--pass-bg)}.ic.fail{color:var(--fail);background:var(--fail-bg)}.ic.auto_fail{color:var(--auto);background:var(--auto-bg)}.ic.empty{color:#b0b0a8;background:#faf9f5}
+  .ic:hover{outline:2px solid var(--brand);outline-offset:-2px}
+  .colh{position:relative}.colh .del{position:absolute;top:1px;right:2px;font-size:9px;color:#c0392b;opacity:0;cursor:pointer;font-weight:700}.colh:hover .del{opacity:1}
+  th.cc-super{background:var(--brand)!important;color:#fff;font-size:12px}th.cc-freq{background:var(--brand-soft)!important;color:var(--brand);min-width:150px}
+  td.cc-cell{vertical-align:top;padding:6px;background:#fff;min-width:150px}
+  .tk{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;padding:6px 8px;margin-bottom:6px;background:#fff;cursor:pointer}
+  .tk:hover{border-color:var(--brand)}.tk .tkname{flex:1;font-size:12px;font-weight:600}
+  .tk .tkw{font-size:10px;font-weight:700;color:#4d5a52;background:#eef0ec;border-radius:5px;padding:1px 5px}
+  .tk .tkv{font-size:10px;font-weight:700;border-radius:5px;padding:2px 6px}
+  .tk.pass{border-color:var(--pass);background:var(--pass-bg)}.tk.fail{border-color:var(--fail);background:var(--fail-bg)}.tk.auto_fail{border-color:var(--auto);background:var(--auto-bg)}
+  .cc-empty{font-size:11px;color:#c0c5be;text-align:center;padding:8px}
+  .cellbadge{color:var(--brand);font-size:9px;vertical-align:top;margin-left:2px}
+  td.score-c{font-weight:700;text-align:center;min-width:66px}th.grp-item{background:#eef0ea!important;color:#4d5a52}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);padding:12px 18px}.legend i{width:13px;height:13px;border-radius:4px;display:inline-block;margin-right:5px;vertical-align:-2px}
+  .additem{display:flex;gap:8px;align-items:center}.additem input{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff}
+  .dropwrap{position:relative;display:inline-block}
+  .dropmenu{display:none;position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);min-width:210px;z-index:40;padding:4px}
+  .dropmenu.on{display:block}.dropmenu button{display:block;width:100%;text-align:left;background:transparent;border:0;padding:9px 12px;border-radius:7px;font-size:13px;font-weight:500;color:var(--ink)}.dropmenu button:hover{background:var(--brand-soft);color:var(--brand)}
+  /* create form */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:20px}
+  .field{display:flex;flex-direction:column;gap:6px}.field.full{grid-column:1/-1}
+  .field label{font-size:12px;font-weight:600;color:#3f4a44}.field .hint{font-size:11px;color:var(--muted)}
+  .field input,.field select,.field textarea{border:1px solid var(--line);border-radius:8px;padding:10px 11px;background:#fff;width:100%}
+  .field textarea{resize:vertical;min-height:60px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}.seg button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 13px;font-weight:600;font-size:13px;color:#4d5a52}.seg button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .interval-row{display:flex;gap:8px;align-items:center;margin-top:10px}.interval-row.hide{display:none}
+  .form-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;border-top:1px solid var(--line);background:#faf9f5}
+  .req{color:var(--fail)}.hidden{display:none!important}.rolegate{font-size:12.5px;color:var(--muted);padding:40px;text-align:center}
+  /* drawer + modal */
+  .overlay{position:fixed;inset:0;background:rgba(18,33,28,.4);display:none;z-index:50}.overlay.on{display:block}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:440px;max-width:92vw;background:var(--panel);box-shadow:-10px 0 40px rgba(0,0,0,.15);transform:translateX(100%);transition:transform .25s;z-index:60;display:flex;flex-direction:column}
+  .drawer.on{transform:translateX(0)}.drawer .dh{padding:18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}.drawer .dh h3{font-size:16px}.drawer .dh small{color:var(--muted);font-size:12px}
+  .drawer .x,.rpt-modal-hd .x{margin-left:auto;border:0;background:#f0efe9;border-radius:8px;width:30px;height:30px;font-size:16px}
+  .drawer .db{padding:8px 18px 18px;overflow:auto;flex:1}
+  .tl-item{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid #eeece5}.tl-item .tl-dot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex-shrink:0}
+  .tl-body b{font-size:13.5px}.tl-body .win-tag{font-size:11px;color:var(--muted);display:block;margin-top:1px}.tl-body .meta{font-size:12.5px;margin-top:5px}
+  .attach{display:inline-flex;gap:6px;font-size:12px;color:var(--brand);background:var(--brand-soft);padding:3px 8px;border-radius:6px;margin-top:6px;font-weight:600}
+  .ph-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .ph-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer}
+  .rpt-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.97);opacity:0;pointer-events:none;width:1000px;max-width:96vw;max-height:90vh;background:var(--panel);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);z-index:70;display:flex;flex-direction:column;transition:.2s}
+  .rpt-modal.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+  .rpt-modal-hd{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}.rpt-modal-hd h3{font-size:16px}
+  .rpt-modal-bd{padding:18px;overflow:auto;background:#eceae2}.rpt-modal-ft{padding:14px 18px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}.chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fff;font-size:13px;font-weight:500;user-select:none}
+  .chip input{width:auto}.chip.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+  .photo-chip{display:inline-flex;align-items:center;gap:10px;background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600}
+  .rpt-canvas{background:#fff;border-radius:10px;padding:20px}.rpt-canvas .rc-hd{display:flex;gap:12px;border-bottom:2px solid var(--brand);padding-bottom:12px;margin-bottom:14px}.rpt-canvas .rc-logo{width:38px;height:38px;border-radius:9px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;font-size:18px}
+  .rpt-canvas table{width:100%;border-collapse:collapse;font-size:12px}.rpt-canvas th{background:var(--brand);color:#fff;padding:7px 8px;font-size:10.5px;border:1px solid var(--brand)}.rpt-canvas td{padding:6px 8px;text-align:center;border:1px solid #e6e3d9;font-weight:600}.rpt-canvas td:first-child{text-align:left}
+  /* Excel-style report */
+  .rp{font-family:Arial,"Segoe UI",sans-serif}
+  .rp-title{display:flex;align-items:center;gap:16px;background:var(--bar);padding:10px 16px;border-radius:6px 6px 0 0}
+  .rp-week{font-weight:800;font-size:13px;color:#1a1a1a;white-space:nowrap}
+  .rp-title h2{flex:1;text-align:center;font-size:24px;font-weight:800;color:#1a1a1a;letter-spacing:.4px;margin:0}
+  .rp-grid{width:100%;border-collapse:collapse;font-size:12px}
+  .rp-grid th{background:var(--head);color:#fff;padding:8px 6px;border:1px solid #fff;font-size:11px;text-align:center;vertical-align:middle;font-weight:700}
+  .rp-grid td{border:1px solid #d9d4c7;padding:5px 6px;text-align:center;font-weight:700;color:#1a1a1a}
+  .rp-grid td.rp-store{background:var(--tint);font-weight:800}
+  .rp-p{background:#8ec06a}
+  .rp-f{background:#e58f7c}
+  .rp-e{background:#faf9f5;color:#b7b7ae}
+  .rp-cm .cm-head{font-weight:800}
+  .rp-cm .cm-tasks{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:4px}
+  .cm-task{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:#fff;border:1px solid rgba(0,0,0,.15)}
+  .cm-task.p{color:#1f7a4d}.cm-task.f{color:#b23a34}.cm-task.e{color:#9a9a9a}
+  .cm-none{color:#b7b7ae}
+  td.rp-score{background:#fff;min-width:96px;padding:4px 6px}
+  .sc-bar{position:relative;height:20px;background:#eef2f7;border-radius:3px;overflow:hidden}
+  .sc-fill{position:absolute;top:0;left:0;bottom:0;background:linear-gradient(90deg,#7fa8d9,#aecbe9)}
+  .sc-txt{position:relative;display:block;line-height:20px;font-weight:800;font-size:11px;color:#12314f;text-align:center}
+  .rp-grid tr.rp-grand td{background:#6b6b6b;color:#fff;font-weight:800;text-align:left}
+  .rp-grid tr.rp-grand td.rp-score{background:#6b6b6b}
+  /* toast */
+  #toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:200}
+  .tmsg{background:#0f1a16;color:#e6efe9;padding:10px 14px;border-radius:8px;font-size:12.5px;max-width:360px;box-shadow:0 6px 20px rgba(0,0,0,.3);border-left:3px solid var(--pass)}
+  .tmsg.err{border-left-color:var(--fail)}
+  @media(max-width:860px){.side{display:none}.form-grid{grid-template-columns:1fr}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="dot">D</div><div><b>Operations</b><span>Store Dashboard · LIVE</span></div></div>
+    <div class="nav">
+      <div class="grp" id="ccGroup">
+        <div class="gh"><span>✦</span> Cleaning Chart <span class="chev">▾</span></div>
+        <div class="sub" id="ccSub">
+          <button data-view="tasks" data-role="both" class="on">☰ Tasks</button>
+          <button data-view="create" data-role="audit">＋ Create Task</button>
+          <button data-view="eval" data-role="audit">▤ Evaluation</button>
+          <button data-view="notif" data-role="both">🔔 Notifications</button>
+          <button data-view="storeitems" data-role="both">📋 My Store Items</button>
+        </div>
+      </div>
+    </div>
+    <div class="foot">Live tester · talks to /api</div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div><div class="crumb">Dashboard / Cleaning Chart / <span id="crumb">Tasks</span></div><h2 id="pageTitle">Tasks</h2></div>
+      <div class="spacer"></div>
+      <div class="role-box"><label>View as</label>
+        <select id="role"><option value="manager">Store Manager</option><option value="audit">Auditor</option><option value="super">Super Admin</option></select>
+      </div>
+      <div class="who"><div class="av" id="avatar">SM</div><div><b id="whoName">Store Manager</b><small id="whoRole">view only</small></div></div>
+    </header>
+
+    <!-- CONNECTION BAR -->
+    <div class="conn">
+      <div class="f" style="flex:1;min-width:200px"><label>API base URL</label><input id="baseUrl"></div>
+      <div class="f" style="flex:2;min-width:220px"><label>Bearer token</label><input id="token" placeholder="paste token (blank = expect 401)"></div>
+      <div class="f" style="width:80px"><label>Store id</label><input id="storeId" value="1"></div>
+      <div class="f" style="width:130px"><label>Date (due)</label><input id="dueDate" type="date"></div>
+      <div class="f" style="width:110px"><label>Eval period type</label>
+        <select id="periodType" onchange="onPeriodTypeChange()"><option value="week">Week</option><option value="date">Date</option></select>
+      </div>
+      <div class="f" style="width:150px"><label>Period</label>
+        <select id="periodKey" onchange="reloadView()"></select>
+      </div>
+      <div class="f"><label>&nbsp;</label><button class="btn sm pri" onclick="reloadView()">↻ Reload</button></div>
+      <div class="f"><label>&nbsp;</label><span><span class="dot" id="connDot"></span> <span id="connTxt">idle</span></span></div>
+    </div>
+
+    <div class="wrap">
+      <!-- TASKS / WINDOWS -->
+      <section id="v-tasks">
+        <div class="card">
+          <div class="hd"><h3>Due on <span id="storeLabel">1</span></h3><div class="spacer"></div>
+            <div class="filters">
+              <button class="btn sm" onclick="loadDue()">Apply</button>
+            </div>
+          </div>
+          <div class="note" id="tasksNote">What's due for this store on the selected date (computed live). Set store id + date above and Reload.</div>
+          <table>
+            <thead><tr><th>Task</th><th>Frequency</th><th>Period</th><th>Status</th><th></th></tr></thead>
+            <tbody id="winRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- CREATE TASK -->
+      <section id="v-create" class="hidden">
+        <div class="card">
+          <div class="hd"><h3>Existing tasks</h3><div class="spacer"></div><button class="btn sm" onclick="loadTasks()">↻ Refresh</button></div>
+          <table>
+            <thead><tr><th>Name</th><th>Frequency</th><th>Stores</th><th>Starts</th><th></th></tr></thead>
+            <tbody id="taskList"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="hd"><h3 id="createTitle">Create Task</h3></div>
+          <div class="form-grid">
+            <div class="field"><label>Task name <span class="req">*</span></label><input id="cName" placeholder="e.g. Clean the oven"></div>
+            <div class="field"><label>Weight <span class="hint">(0–100)</span></label><input id="cWeight" type="number" min="0" max="100" placeholder="20"></div>
+            <div class="field full"><label>Description</label><textarea id="cDesc" placeholder="What to do…"></textarea></div>
+            <div class="field full"><label>Frequency <span class="req">*</span></label>
+              <div class="seg" id="freqSeg">
+                <button class="on" data-f="daily">Daily</button><button data-f="weekly">Weekly</button>
+                <button data-f="monthly">Monthly</button><button data-f="hourly">Every X hours</button>
+              </div>
+              <div class="interval-row hide" id="intervalRow"><span class="hint">Repeat every</span>
+                <input type="number" id="cInterval" min="1" max="24" value="2" style="width:80px;border:1px solid var(--line);border-radius:8px;padding:8px 10px"><span class="hint">hours</span></div>
+            </div>
+            <div class="field"><label>Starts at <span class="req">*</span> <span class="hint">(anchor date)</span></label><input id="cStart" type="date" value="2026-07-20"></div>
+            <div class="field"><label>Ends at <span class="hint">(optional — recurrence stop)</span></label><input id="cEnd" type="date"></div>
+            <div class="field full"><label>Assign to store ids <span class="req">*</span> <span class="hint">(comma separated)</span></label><input id="cStores" value="1"></div>
+            <div class="field full"><label>Attachment on completion</label><div class="note" id="attNote" style="margin:0">Required (daily/weekly/monthly).</div></div>
+          </div>
+          <div class="form-foot"><button class="btn" id="cancelEditBtn" style="display:none" onclick="cancelEdit()">Cancel edit</button><button class="btn" onclick="go('tasks')">Close</button><button class="btn pri" id="saveTaskBtn" onclick="saveTask()">Create task</button></div>
+        </div>
+      </section>
+
+      <!-- EVALUATION -->
+      <section id="v-eval" class="hidden">
+        <div class="card">
+          <div class="hd"><h3>Evaluation Chart</h3><div class="spacer"></div>
+            <div class="additem">
+              <input id="newItem" placeholder="New item (e.g. Parking)" onkeydown="if(event.key==='Enter')addItem()">
+              <button class="btn pri sm" onclick="addItem()">＋ Add item</button>
+              <button class="btn sm" onclick="exportCSV()">⤓ CSV</button>
+              <div class="dropwrap">
+                <button class="btn sm" onclick="toggleReportMenu(event)">🖼 Report ▾</button>
+                <div class="dropmenu" id="reportMenu">
+                  <button onclick="openReport('full')">Cleaning Report</button>
+                  <button onclick="openReport('top')">Top Performance Stores</button>
+                  <button onclick="openReport('watch')">Performance Watchlist</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="note">Click an item cell to cycle Pass→Fail→Auto→Empty (saves to API). Click a chart task to toggle Pass/Fail. Scores are read from the API.</div>
+          <div class="legend"><span><i style="background:var(--pass-bg);border:1px solid var(--pass)"></i>Pass</span><span><i style="background:var(--fail-bg);border:1px solid var(--fail)"></i>Fail</span><span><i style="background:var(--auto-bg);border:1px solid var(--auto)"></i>Auto Fail</span></div>
+          <div class="matrix-wrap"><table class="eval-grid" id="evalGrid"></table></div>
+        </div>
+      </section>
+
+      <!-- NOTIFICATIONS / DUE EVALUATIONS -->
+      <section id="v-notif" class="hidden">
+        <div class="card">
+          <div class="hd"><h3>Due Evaluations</h3><div class="spacer"></div><button class="btn sm" onclick="loadNotifications()">↻ Refresh</button></div>
+          <div class="note">Inspection items not yet marked "Pass" for store <b id="notifStoreLbl">1</b>, period <b id="notifPeriodLbl"></b>. Click Evaluate to grade with a notice + photos — same popup as the grid's pencil icon and the Tasks page shortcut.</div>
+          <table><thead><tr><th>Item</th><th>Current status</th><th></th></tr></thead><tbody id="notifRows"></tbody></table>
+        </div>
+      </section>
+
+      <!-- MY STORE ITEMS — read-only view for the Store Manager: item status + notice + photos -->
+      <section id="v-storeitems" class="hidden">
+        <div class="card">
+          <div class="hd"><h3>Inspection Items — Store <span id="siStoreLbl">1</span></h3><div class="spacer"></div><button class="btn sm" onclick="loadStoreItems()">↻ Refresh</button></div>
+          <div class="note">Read-only: this store's inspection item evaluations for period <b id="siPeriodLbl"></b> — status, the auditor's notice, and any photos attached.</div>
+          <table><thead><tr><th>Item</th><th>Status</th><th>Notice</th><th>Photos</th></tr></thead><tbody id="siRows"></tbody></table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY DRAWER -->
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="dh"><div><h3 id="drTitle">History</h3><small id="drSub"></small></div><button class="x" onclick="closeDrawer()">×</button></div>
+  <div class="db" id="drBody"></div>
+</aside>
+
+<!-- COMPLETE MODAL -->
+<div class="overlay" id="cmpOverlay" onclick="closeComplete()"></div>
+<div class="rpt-modal" id="cmpModal" style="width:480px">
+  <div class="rpt-modal-hd"><div><h3 id="cmpTitle">Complete task</h3><small id="cmpSub" style="color:var(--muted)"></small></div><button class="x" onclick="closeComplete()">×</button></div>
+  <div class="rpt-modal-bd" style="background:#fff">
+    <div class="field" style="margin-bottom:16px"><label>Who did it? <span class="req">*</span></label><div class="chips" id="cmpEmployees" style="margin-top:6px"></div></div>
+    <div class="field" style="margin-bottom:16px"><label>Notes</label><textarea id="cmpNotes" style="border:1px solid var(--line);border-radius:8px;padding:10px;width:100%;min-height:56px;margin-top:6px"></textarea></div>
+    <div class="field"><label id="cmpPhotoLabel">Photos</label><div id="cmpPhoto" style="margin-top:8px"></div><input type="file" id="cmpFile" accept="image/*" multiple style="display:none" onchange="onPhotoPick(this)"></div>
+    <div id="cmpError" style="color:var(--fail);font-size:12.5px;font-weight:600;margin-top:12px"></div>
+  </div>
+  <div class="rpt-modal-ft"><div class="spacer"></div><button class="btn" onclick="closeComplete()">Cancel</button><button class="btn pri" onclick="saveComplete()">✓ Mark done</button></div>
+</div>
+
+<!-- GRADE MODAL — shared popup for evaluating an item or a chart task: verdict + notice + photos.
+     Opened from: the evaluation grid's pencil icon, the Notifications page, and the Tasks page shortcut. -->
+<div class="overlay" id="gradeOverlay" onclick="closeGrade()"></div>
+<div class="rpt-modal" id="gradeModal" style="width:480px">
+  <div class="rpt-modal-hd"><div><h3 id="gradeTitle">Evaluate</h3><small id="gradeSub" style="color:var(--muted)"></small></div><button class="x" onclick="closeGrade()">×</button></div>
+  <div class="rpt-modal-bd" style="background:#fff">
+    <div class="field" style="margin-bottom:16px"><label>Verdict <span class="req">*</span></label><div class="seg" id="gradeSeg" style="margin-top:6px"></div></div>
+    <div class="field" style="margin-bottom:16px"><label>Notice</label><textarea id="gradeNote" style="border:1px solid var(--line);border-radius:8px;padding:10px;width:100%;min-height:56px;margin-top:6px" placeholder="What did you find?"></textarea></div>
+    <div class="field"><label>Photos</label><div id="gradePhoto" style="margin-top:8px"></div><input type="file" id="gradeFile" accept="image/*" multiple style="display:none" onchange="onGradePhotoPick(this)"></div>
+    <div id="gradeExisting"></div>
+    <div id="gradeError" style="color:var(--fail);font-size:12.5px;font-weight:600;margin-top:12px"></div>
+  </div>
+  <div class="rpt-modal-ft"><div class="spacer"></div><button class="btn" onclick="closeGrade()">Cancel</button><button class="btn pri" onclick="saveGrade()">✓ Save evaluation</button></div>
+</div>
+
+<!-- ITEM DETAILS MODAL — read-only, opened by clicking a row on "My Store Items" -->
+<div class="overlay" id="itemDetailsOverlay" onclick="closeItemDetails()"></div>
+<div class="rpt-modal" id="itemDetailsModal" style="width:480px">
+  <div class="rpt-modal-hd"><div><h3 id="idTitle">Item details</h3><small id="idSub" style="color:var(--muted)"></small></div><button class="x" onclick="closeItemDetails()">×</button></div>
+  <div class="rpt-modal-bd" style="background:#fff">
+    <div class="field" style="margin-bottom:16px"><label>Status</label><div style="margin-top:6px" id="idStatus"></div></div>
+    <div class="field" style="margin-bottom:16px"><label>Notice</label><div id="idNote" style="margin-top:6px;font-size:13.5px;color:#3f4a44;white-space:pre-wrap"></div></div>
+    <div class="field"><label>Photos</label><div id="idPhotos" style="margin-top:8px"></div></div>
+  </div>
+  <div class="rpt-modal-ft"><div class="spacer"></div><button class="btn" onclick="closeItemDetails()">Close</button></div>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="overlay" id="rptOverlay" onclick="closeReport()"></div>
+<div class="rpt-modal" id="rptModal">
+  <div class="rpt-modal-hd"><div><h3 id="rptModalTitle">Report</h3><small style="color:var(--muted)">Preview — export as image</small></div><button class="x" onclick="closeReport()">×</button></div>
+  <div class="rpt-modal-bd"><div id="rptCanvas" class="rpt-canvas"></div></div>
+  <div class="rpt-modal-ft"><div class="spacer"></div><button class="btn" onclick="closeReport()">Cancel</button><button class="btn pri" onclick="exportReportImage()">🖼 Export PNG</button></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+(function(){const o=location.origin.startsWith('http')?location.origin:'http://127.0.0.1:8000';$('#baseUrl').value=o+'/api';})();
+
+const cfg={ base:()=>$('#baseUrl').value.replace(/\/$/,''), token:()=>$('#token').value.trim(),
+  store:()=>$('#storeId').value.trim(), period:()=>({period_type:$('#periodType').value,period_key:$('#periodKey').value.trim()}) };
+
+/* ---------------- PERIOD PICKER (date dropdown for the evaluation page) ---------------- */
+// ISO-8601 week: Thursday of the same week decides the week-year; week 1 contains the year's first Thursday.
+function isoWeekKey(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=(d.getUTCDay()+6)%7; // 0=Mon..6=Sun
+  d.setUTCDate(d.getUTCDate()-day+3); // nearest Thursday
+  const firstThu=new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  const firstThuDay=(firstThu.getUTCDay()+6)%7;
+  firstThu.setUTCDate(firstThu.getUTCDate()-firstThuDay+3);
+  const week=1+Math.round((d-firstThu)/(7*24*3600*1000));
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+function todayISO(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);}
+
+// Builds the list of selectable periods, newest first. Week type: current
+// week plus 4 weeks back / 4 weeks ahead. Date type: today plus 14 days back.
+function buildPeriodOptions(type){
+  const opts=[]; const today=new Date(todayISO()+'T00:00:00');
+  if(type==='week'){
+    for(let i=4;i>=-4;i--){
+      const d=new Date(today); d.setUTCDate(d.getUTCDate()-i*7);
+      const key=isoWeekKey(d.toISOString().slice(0,10));
+      if(!opts.some(o=>o.value===key)) opts.push({value:key,label:key});
+    }
+  } else {
+    for(let i=0;i<=14;i++){
+      const d=new Date(today); d.setUTCDate(d.getUTCDate()-i);
+      const key=d.toISOString().slice(0,10);
+      opts.push({value:key,label:key});
+    }
+  }
+  return opts;
+}
+function currentPeriodKey(type){ return type==='week' ? isoWeekKey(todayISO()) : todayISO(); }
+function populatePeriodKeyOptions(preferredValue){
+  const type=$('#periodType').value;
+  const opts=buildPeriodOptions(type);
+  const cur=currentPeriodKey(type);
+  const keep = (preferredValue && opts.some(o=>o.value===preferredValue)) ? preferredValue
+             : (opts.some(o=>o.value===cur) ? cur : opts[opts.length-1].value);
+  $('#periodKey').innerHTML=opts.map(o=>`<option value="${o.value}"${o.value===keep?' selected':''}>${o.label}</option>`).join('');
+}
+function onPeriodTypeChange(){ populatePeriodKeyOptions(); reloadView(); }
+(function initPeriodPicker(){ populatePeriodKeyOptions(); })();
+
+function toast(msg,err){const d=document.createElement('div');d.className='tmsg'+(err?' err':'');d.textContent=msg;$('#toast').appendChild(d);setTimeout(()=>d.remove(),4500);}
+function conn(ok){$('#connDot').className='dot'+(ok?' ok':'');$('#connTxt').textContent=ok?'connected':'error';}
+
+async function api(method,path,{query,body,form}={}){
+  let url=cfg.base()+path;
+  if(query){const q=new URLSearchParams(query).toString();if(q)url+='?'+q;}
+  const headers={'Accept':'application/json'};const t=cfg.token();if(t)headers.Authorization='Bearer '+t;
+  let b; if(form)b=form; else if(body){headers['Content-Type']='application/json';b=JSON.stringify(body);}
+  try{
+    const res=await fetch(url,{method,headers,body:b});
+    const txt=await res.text();let data;try{data=JSON.parse(txt);}catch{data=txt;}
+    conn(res.ok);
+    if(!res.ok) toast(`${res.status} ${method} ${path} — ${briefErr(data)}`,true);
+    return {status:res.status,ok:res.ok,data};
+  }catch(e){conn(false);toast('Network/CORS error. Open this page from the app (php artisan serve → /cleaning-app.html).',true);return {status:0,ok:false,data:null};}
+}
+function briefErr(d){ if(!d) return 'error'; if(typeof d==='string') return d.slice(0,120);
+  let m=d.message||''; if(d.errors){m+=' · '+Object.values(d.errors).flat().join('; ');} return (m||JSON.stringify(d)).slice(0,160); }
+
+/* ---------------- DUE (compute on read) ---------------- */
+let WINS=[], DUE_EMPLOYEES=[];
+function dueDate(){ return $('#dueDate').value || new Date().toISOString().slice(0,10); }
+function stCls(s){ return s==='overdue'?'failed':s; }   // reuse st-failed styling for overdue
+async function loadDue(){
+  $('#storeLabel').textContent=`store ${cfg.store()} · ${dueDate()}`;
+  const r=await api('GET',`/cleaning/stores/${cfg.store()}/dates/${dueDate()}/due`);
+  WINS = (r.data&&r.data.items)||[];
+  DUE_EMPLOYEES = (r.data&&r.data.employees)||[];   // employees come with the due response now
+  $('#winRows').innerHTML = WINS.length? WINS.map((it,i)=>{
+    const period=`${it.period?.[0]||''} → ${it.period?.[1]||''}`;
+    const done=it.status==='done';
+    return `<tr>
+      <td><div class="taskname">${it.label||'(task)'}<small>weight ${it.weight??'—'} · photo ${it.photo_required?'required':'optional'}${it.done_by&&it.done_by.length?' · by '+it.done_by.join(', '):''}</small></div></td>
+      <td><span class="freq">${it.frequency||'—'}</span></td>
+      <td><div class="win">${period}</div></td>
+      <td><span class="st-pill st-${stCls(it.status)}">${it.status}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn link" onclick="openHistory(${i})">History</button>
+        ${it.task_id?`<button class="btn link" onclick="quickEvaluateDue(${i})">📋 Evaluate</button>`:''}
+        ${done?`<button class="btn link" onclick="undo(${i})">Undo</button>`:`<button class="btn link" onclick="openComplete(${i})">Complete</button>`}
+      </td></tr>`;
+  }).join('') : `<tr><td colspan="5" class="rolegate">Nothing due on this date. Create a task for this store, or change the date.</td></tr>`;
+}
+
+async function openHistory(i){
+  const it=WINS[i];
+  $('#drTitle').textContent='History — '+(it.label||'task');
+  $('#drSub').textContent=`store ${cfg.store()} · ${it.frequency||''}`;
+  const r=await api('GET',`/cleaning/stores/${cfg.store()}/tasks/${it.task_id}/history`);
+  const rows=(r.data&&r.data.data)||[];
+  $('#drBody').innerHTML = rows.length? rows.map(h=>{
+    const who=(h.done_by||[]).join(', ')||'—';
+    const col=h.status==='done'?'var(--pass)':h.status==='overdue'?'var(--fail)':'var(--pend)';
+    return `<div class="tl-item"><div class="tl-dot" style="background:${col}"></div><div class="tl-body">
+      <b>${h.status} — ${who}</b>
+      <span class="win-tag">Period ${h.period?.[0]||''}–${h.period?.[1]||''}${h.done_at?' · done '+h.done_at.slice(0,16).replace('T',' '):''}</span>
+      ${h.note?`<div class="meta">${h.note}</div>`:''}
+      ${(h.photos&&h.photos.length)?`<div class="ph-row">${h.photos.map(u=>`<a href="${u}" target="_blank"><img class="ph-thumb" src="${u}" alt="photo"></a>`).join('')}</div>`:(h.has_photo?`<span class="attach">📎 photo</span>`:'')}
+    </div></div>`;}).join('') : `<div class="rolegate">No history in range.</div>`;
+  $('#overlay').classList.add('on');$('#drawer').classList.add('on');
+}
+function closeDrawer(){$('#overlay').classList.remove('on');$('#drawer').classList.remove('on');}
+async function undo(i){ if(!confirm('Undo this completion?'))return;
+  const it=WINS[i];
+  const r=await api('POST',`/cleaning/stores/${cfg.store()}/tasks/${it.task_id}/uncomplete`,{body:{date:dueDate()}});
+  if(r.ok){toast('Undone');loadDue();}
+}
+
+/* ---------------- COMPLETE MODAL (supports multiple photos) ---------------- */
+let CMP={item:null,employees:[],files:[]};
+function openComplete(i){
+  const it=WINS[i]; CMP={item:it,employees:[],files:[]};
+  $('#cmpTitle').textContent='Complete — '+(it.label||'');
+  $('#cmpSub').textContent=`store ${cfg.store()} · ${it.frequency||''} · ${dueDate()}`;
+  $('#cmpNotes').value=''; $('#cmpError').textContent='';
+  const req=!!it.photo_required;
+  $('#cmpPhotoLabel').innerHTML=req?'Photos <span class="req">*</span> <span class="hint">at least one required</span>':'Photos <span class="hint">(optional)</span>';
+  renderCmpPhoto();
+  const emps=DUE_EMPLOYEES;   // already loaded with the due response
+  $('#cmpEmployees').innerHTML = emps.length? emps.map(e=>`<label class="chip" onclick="toggleEmp(${e.id},this)"><input type="checkbox" value="${e.id}"> ${e.name||('#'+e.id)}</label>`).join('') : '<span class="hint">No employees for this store (sync from HiringPizza, or seed one).</span>';
+  $('#cmpOverlay').classList.add('on');$('#cmpModal').classList.add('on');
+}
+function toggleEmp(id,el){const cb=el.querySelector('input');cb.checked=!cb.checked;el.classList.toggle('on',cb.checked);
+  CMP.employees=$$('#cmpEmployees input:checked').map(x=>Number(x.value));}
+function renderCmpPhoto(){
+  const chips=CMP.files.map((f,i)=>`<div class="photo-chip">📎 ${f.name}<button onclick="removeCmpPhoto(${i})" style="border:0;background:none;color:var(--fail);font-weight:700;cursor:pointer">✕</button></div>`).join('');
+  $('#cmpPhoto').innerHTML=`<div class="ph-row" style="margin-bottom:8px">${chips}</div><button class="btn sm" onclick="document.getElementById('cmpFile').click()">⤒ Add photo(s)</button>`;
+}
+function onPhotoPick(inp){CMP.files=CMP.files.concat([...inp.files]);inp.value='';renderCmpPhoto();}
+function removeCmpPhoto(i){CMP.files.splice(i,1);renderCmpPhoto();}
+function closeComplete(){$('#cmpOverlay').classList.remove('on');$('#cmpModal').classList.remove('on');}
+async function saveComplete(){
+  if(!CMP.employees.length){$('#cmpError').textContent='Select at least one employee.';return;}
+  const fd=new FormData();
+  fd.append('date',dueDate());
+  CMP.employees.forEach(e=>fd.append('employee_ids[]',e));
+  fd.append('note',$('#cmpNotes').value);
+  CMP.files.forEach(f=>fd.append('photos[]',f));
+  const r=await api('POST',`/cleaning/stores/${cfg.store()}/tasks/${CMP.item.task_id}/complete`,{form:fd});
+  if(r.ok){toast('Marked done ✓');closeComplete();loadDue();}
+  else{$('#cmpError').textContent=briefErr(r.data);}
+}
+
+/* ---------------- CREATE / EDIT / DELETE TASK ---------------- */
+let FREQ='daily', EDIT_ID=null, TASKS=[];
+function setFreq(f){ FREQ=f; $$('#freqSeg button').forEach(x=>x.classList.toggle('on',x.dataset.f===f));
+  $('#intervalRow').classList.toggle('hide',FREQ!=='hourly');
+  $('#attNote').textContent=FREQ==='hourly'?'Optional for hourly tasks.':'Required (daily/weekly/monthly).'; }
+$$('#freqSeg button').forEach(b=>b.onclick=()=>setFreq(b.dataset.f));
+
+async function loadTasks(){
+  const r=await api('GET','/cleaning/tasks');
+  TASKS=(r.data&&r.data.data)||[];
+  $('#taskList').innerHTML = TASKS.length ? TASKS.map(t=>{
+    const stores=(t.stores||[]).map(s=>s.id).join(', ');
+    return `<tr>
+      <td><div class="taskname">${t.name}<small>${t.description||''}</small></div></td>
+      <td><span class="freq">${t.frequency}${t.frequency==='hourly'&&t.interval_hours?(' /'+t.interval_hours+'h'):''}</span></td>
+      <td>${stores||'—'}</td>
+      <td>${(t.starts_at||'').slice(0,10)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn link" onclick="editTask(${t.id})">Edit</button>
+        <button class="btn link" style="color:var(--fail)" onclick="deleteTask(${t.id})">Delete</button>
+      </td></tr>`;
+  }).join('') : `<tr><td colspan="5" class="rolegate">No tasks yet.</td></tr>`;
+}
+function editTask(id){
+  const t=TASKS.find(x=>x.id===id); if(!t)return;
+  EDIT_ID=id;
+  $('#cName').value=t.name||''; $('#cDesc').value=t.description||''; $('#cWeight').value=t.weight??'';
+  setFreq(t.frequency||'daily'); $('#cInterval').value=t.interval_hours||2;
+  $('#cStart').value=(t.starts_at||'').slice(0,10); $('#cEnd').value=(t.ends_at||'').slice(0,10);
+  $('#cStores').value=(t.stores||[]).map(s=>s.id).join(',');
+  $('#createTitle').textContent='Edit Task #'+id;
+  $('#saveTaskBtn').textContent='Update task';
+  $('#cancelEditBtn').style.display='';
+  window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+}
+function cancelEdit(){
+  EDIT_ID=null;
+  $('#cName').value='';$('#cDesc').value='';$('#cWeight').value='';setFreq('daily');
+  $('#cEnd').value='';$('#createTitle').textContent='Create Task';$('#saveTaskBtn').textContent='Create task';$('#cancelEditBtn').style.display='none';
+}
+async function deleteTask(id){
+  if(!confirm('Soft-delete this task? (history is kept, it disappears from Due)'))return;
+  const r=await api('DELETE','/cleaning/tasks/'+id);
+  if(r.ok){toast('Task deleted');loadTasks();}
+}
+async function saveTask(){
+  const body={name:$('#cName').value,description:$('#cDesc').value||null,
+    weight:$('#cWeight').value?Number($('#cWeight').value):null,
+    frequency:FREQ, interval:1,
+    interval_hours:FREQ==='hourly'?Number($('#cInterval').value):null,
+    starts_at:$('#cStart').value, ends_at:$('#cEnd').value||null,
+    store_ids:$('#cStores').value.split(',').map(s=>Number(s.trim())).filter(Boolean)};
+  if(EDIT_ID){
+    const r=await api('PUT','/cleaning/tasks/'+EDIT_ID,{body});
+    if(r.ok){toast('Task updated ✓');cancelEdit();loadTasks();}
+  }else{
+    const r=await api('POST','/cleaning/tasks',{body});
+    if(r.status===201){toast('Task created ✓');loadTasks();loadDue();}
+  }
+}
+
+/* ---------------- EVALUATION ---------------- */
+let GEVAL=null;
+const LBL={pass:'Pass',fail:'Fail',auto_fail:'Auto',empty:'–'};
+function scColor(p){return p>=70?'var(--pass)':p>=40?'var(--pend)':'var(--fail)';}
+async function loadEval(){
+  const r=await api('GET','/cleaning/evaluations',{query:cfg.period()});
+  if(!r.ok){$('#evalGrid').innerHTML='';return;}
+  GEVAL=r.data; renderEval();
+}
+function renderEval(){
+  const items=GEVAL.items||[], rows=GEVAL.rows||[], FREQS=['daily','weekly','monthly','hourly'];
+  const head=`<thead>
+    <tr><th class="store-h" rowspan="2">Store</th><th class="grp-item" colspan="${items.length||1}">Inspection Items</th>
+    <th class="grp-item" rowspan="2">Item<br>Score</th><th class="cc-super" colspan="4">Cleaning Chart</th><th class="cc-super" rowspan="2">Chart<br>Score</th><th class="grp-item" rowspan="2">Notify</th></tr>
+    <tr>${items.map(it=>`<th class="colh">${it.name}<span class="del" title="remove" onclick="delItem(${it.id})">✕</span></th>`).join('')||'<th></th>'}
+    ${FREQS.map(f=>`<th class="cc-freq">${f}</th>`).join('')}</tr></thead>`;
+  const body='<tbody>'+rows.map(row=>{
+    // Items (Group A): clicking a cell always opens the Evaluate popup (verdict + notice + photos).
+    const itemCells=(items.length?items:[{name:null}]).map(it=>{ if(!it.name) return '<td class="ic empty">–</td>';
+      const cell=row.item_values[it.name]||{value:'empty',note:null,photos:[]};
+      const v=cell.value;
+      const badge=(cell.note||(cell.photos&&cell.photos.length))?'<span class="cellbadge" title="has notice/photos">●</span>':'';
+      return `<td class="ic ${v}" onclick="openGradeFromItem(${row.store_id},${it.id})">${LBL[v]}${badge}</td>`;}).join('');
+    // Chart tasks (Group B): quick click-to-toggle pass/fail, same as always — no popup.
+    const freqCells=FREQS.map(f=>{const list=(row.chart&&row.chart[f])||[];
+      if(!list.length) return '<td class="cc-cell"><div class="cc-empty">—</div></td>';
+      return `<td class="cc-cell">${list.map(t=>{const v=t.verdict||'ungraded';const cls=t.verdict||'';
+        return `<div class="tk ${cls}" onclick="toggleCC(${row.store_id},${t.task_id},'${t.verdict||''}')"><div class="tkname">${t.name}</div><span class="tkw">${t.weight}</span><span class="tkv">${t.verdict==='pass'?'P':t.verdict==='fail'?'F':t.verdict==='auto_fail'?'AF':'·'}</span></div>`;}).join('')}</td>`;}).join('');
+    return `<tr><td class="store-c">${row.store}<div style="font-size:10px;color:var(--muted)">#${row.store_id}</div></td>
+      ${itemCells}<td class="score-c" style="color:${scColor(row.item_score)}">${row.item_score}%</td>
+      ${freqCells}<td class="score-c" style="color:${scColor(row.chart_score)}">${row.chart_score}%${row.weight_lost?`<div style="font-size:10px;color:var(--fail)">−${row.weight_lost}</div>`:''}</td>
+      <td style="text-align:center;white-space:nowrap"><button class="btn link" onclick="openStoreDetails(${row.store_id})">👁 Details</button> <button class="btn link" onclick="finalizeStore(${row.store_id})">✓ Finalize</button></td></tr>`;
+  }).join('')+'</tbody>';
+  $('#evalGrid').innerHTML=head+body;
+}
+async function finalizeStore(storeId){
+  if(!confirm('Finalize this store’s evaluation and notify it?'))return;
+  const r=await api('POST','/cleaning/evaluations/finalize',{body:{store_id:storeId,...cfg.period()}});
+  if(r.ok) toast('Finalized — store notified ✓');
+}
+async function toggleCC(storeId,taskId,cur){
+  const next=cur==='pass'?'fail':'pass';
+  const r=await api('POST','/cleaning/evaluations',{body:{store_id:storeId,...cfg.period(),kind:'chart',cleaning_task_id:taskId,verdict:next}});
+  if(r.ok) loadEval();
+}
+async function addItem(){const v=$('#newItem').value.trim();if(!v)return;const r=await api('POST','/cleaning/inspection-items',{body:{name:v}});if(r.ok){$('#newItem').value='';toast('Item added');loadEval();}}
+async function delItem(id){if(!confirm('Remove this item column?'))return;const r=await api('DELETE','/cleaning/inspection-items/'+id);if(r.ok){toast('Item removed');loadEval();}}
+/* ---------------- GRADE MODAL — items only (verdict + notice + photos).
+   Chart tasks never use this popup: everywhere on the Cleaning Chart (and the
+   quick "Evaluate" shortcut on the Tasks/Due page) they stay a plain click-to-
+   toggle pass/fail via toggleCC(), same as before. ---------------- */
+let GRADE={storeId:null,itemId:null,value:'empty',files:[],existing:[]};
+const GRADE_VALUES=['pass','fail','auto_fail','empty'];
+function openGrade({storeId,itemId,label,current,note,existingPhotos}){
+  GRADE={storeId,itemId,value:current||'empty',files:[],existing:existingPhotos||[]};
+  $('#gradeTitle').textContent='Evaluate item — '+(label||'');
+  $('#gradeSub').textContent=`store ${storeId} · period ${cfg.period().period_key}`;
+  $('#gradeNote').value=note||''; $('#gradeError').textContent='';
+  renderGradeSeg(); renderGradePhoto(); renderGradeExisting();
+  $('#gradeOverlay').classList.add('on');$('#gradeModal').classList.add('on');
+}
+function renderGradeSeg(){
+  $('#gradeSeg').innerHTML=GRADE_VALUES.map(v=>`<button class="${GRADE.value===v?'on':''}" onclick="setGradeValue('${v}')">${LBL[v]||v}</button>`).join('');
+}
+function setGradeValue(v){GRADE.value=v;renderGradeSeg();}
+function renderGradePhoto(){
+  const chips=GRADE.files.map((f,i)=>`<div class="photo-chip">📎 ${f.name}<button onclick="removeGradePhoto(${i})" style="border:0;background:none;color:var(--fail);font-weight:700;cursor:pointer">✕</button></div>`).join('');
+  $('#gradePhoto').innerHTML=`<div class="ph-row" style="margin-bottom:8px">${chips}</div><button class="btn sm" onclick="document.getElementById('gradeFile').click()">⤒ Add photo(s)</button>`;
+}
+function onGradePhotoPick(inp){GRADE.files=GRADE.files.concat([...inp.files]);inp.value='';renderGradePhoto();}
+function removeGradePhoto(i){GRADE.files.splice(i,1);renderGradePhoto();}
+function renderGradeExisting(){
+  $('#gradeExisting').innerHTML = GRADE.existing.length
+    ? `<div class="hint" style="margin:10px 0 6px">Already attached:</div><div class="ph-row">${GRADE.existing.map(u=>`<a href="${u}" target="_blank"><img class="ph-thumb" src="${u}" alt="photo"></a>`).join('')}</div>`
+    : '';
+}
+function closeGrade(){$('#gradeOverlay').classList.remove('on');$('#gradeModal').classList.remove('on');}
+async function saveGrade(){
+  const fd=new FormData();
+  fd.append('store_id',GRADE.storeId);
+  fd.append('period_type',cfg.period().period_type);
+  fd.append('period_key',cfg.period().period_key);
+  fd.append('kind','item');
+  fd.append('inspection_item_id',GRADE.itemId);
+  fd.append('value',GRADE.value);
+  fd.append('note',$('#gradeNote').value);
+  GRADE.files.forEach(f=>fd.append('images[]',f));
+  const r=await api('POST','/cleaning/evaluations',{form:fd});
+  if(r.ok){
+    toast('Evaluation saved ✓'); closeGrade();
+    if(GEVAL) await loadEval();
+    if(!$('#v-notif').classList.contains('hidden')) loadNotifications();
+  }else{$('#gradeError').textContent=briefErr(r.data);}
+}
+// Opened by clicking an item cell on the Cleaning Chart, or "Evaluate" on the
+// Notifications page — looks up the current value/note/photos from GEVAL.
+function openGradeFromItem(storeId,itemId){
+  const item=(GEVAL&&GEVAL.items||[]).find(x=>x.id===itemId);
+  const row=(GEVAL&&GEVAL.rows||[]).find(r=>r.store_id===storeId);
+  const cell=(row&&item&&row.item_values[item.name])||{value:'empty',note:null,photos:[]};
+  openGrade({storeId,itemId,label:(item&&item.name)||('#'+itemId),current:cell.value,note:cell.note,existingPhotos:cell.photos||[]});
+}
+// Opened from the "Evaluate" shortcut on the Tasks/Due page — a fast pass/fail
+// toggle for a chart task, exactly like clicking its tile on the Cleaning
+// Chart. No popup, matching that page's quick-grading behaviour.
+async function quickEvaluateDue(i){
+  const it=WINS[i]; if(!it||!it.task_id) return;
+  const r=await api('GET','/cleaning/evaluations',{query:cfg.period()});
+  if(!r.ok) return;
+  const row=(r.data.rows||[]).find(x=>String(x.store_id)===String(cfg.store()));
+  let current=null;
+  if(row) ['daily','weekly','monthly','hourly'].forEach(f=>(row.chart[f]||[]).forEach(t=>{if(t.task_id===it.task_id) current=t.verdict;}));
+  const next=current==='pass'?'fail':'pass';
+  await toggleCC(cfg.store(),it.task_id,current||'');
+  toast('Evaluated as '+LBL[next]);
+}
+
+/* ---------------- EVALUATION DETAILS DRAWER (reuses the History drawer) ---------------- */
+function openStoreDetails(storeId){
+  const row=(GEVAL&&GEVAL.rows||[]).find(r=>r.store_id===storeId); if(!row){toast('Load the Evaluation grid first.',true);return;}
+  $('#drTitle').textContent='Evaluation details — '+row.store;
+  $('#drSub').textContent=`period ${cfg.period().period_key} · item score ${row.item_score}% · chart score ${row.chart_score}%`;
+  const items=(GEVAL.items||[]);
+  const itemRows=items.map(it=>{
+    const cell=row.item_values[it.name]||{value:'empty',note:null,photos:[]};
+    const col=cell.value==='pass'?'var(--pass)':cell.value==='empty'?'#ccc':'var(--fail)';
+    return `<div class="tl-item"><div class="tl-dot" style="background:${col}"></div><div class="tl-body">
+      <b>${it.name} — ${LBL[cell.value]}</b>
+      ${cell.note?`<div class="meta">${cell.note}</div>`:''}
+      ${(cell.photos&&cell.photos.length)?`<div class="ph-row">${cell.photos.map(u=>`<a href="${u}" target="_blank"><img class="ph-thumb" src="${u}" alt="photo"></a>`).join('')}</div>`:''}
+    </div></div>`;
+  }).join('') || '<div class="rolegate">No inspection items.</div>';
+  const chartRows=[];
+  ['daily','weekly','monthly','hourly'].forEach(f=>(row.chart[f]||[]).forEach(t=>{
+    const col=t.verdict==='pass'?'var(--pass)':t.verdict?'var(--fail)':'#ccc';
+    chartRows.push(`<div class="tl-item"><div class="tl-dot" style="background:${col}"></div><div class="tl-body">
+      <b>${t.name} <span class="win-tag">(${f} · weight ${t.weight})</span> — ${t.verdict?LBL[t.verdict]:'Ungraded'}</b>
+      ${t.note?`<div class="meta">${t.note}</div>`:''}
+      ${(t.photos&&t.photos.length)?`<div class="ph-row">${t.photos.map(u=>`<a href="${u}" target="_blank"><img class="ph-thumb" src="${u}" alt="photo"></a>`).join('')}</div>`:''}
+    </div></div>`);
+  }));
+  $('#drBody').innerHTML=`<h3 style="font-size:13px;margin-bottom:6px">Inspection items</h3>${itemRows}
+    <h3 style="font-size:13px;margin:16px 0 6px">Cleaning chart tasks</h3>${chartRows.join('')||'<div class="rolegate">No tasks.</div>'}`;
+  $('#overlay').classList.add('on');$('#drawer').classList.add('on');
+}
+
+/* ---------------- NOTIFICATIONS / DUE EVALUATIONS ---------------- */
+async function loadNotifications(){
+  await loadEval();
+  $('#notifStoreLbl').textContent=cfg.store();
+  $('#notifPeriodLbl').textContent=cfg.period().period_key;
+  const row=(GEVAL&&GEVAL.rows||[]).find(r=>String(r.store_id)===String(cfg.store()));
+  const items=(GEVAL&&GEVAL.items)||[];
+  if(!row){$('#notifRows').innerHTML='<tr><td colspan="3" class="rolegate">No evaluation data for this store/period yet.</td></tr>';return;}
+  const due=items.filter(it=>{const c=row.item_values[it.name];return !c||c.value!=='pass';});
+  $('#notifRows').innerHTML = due.length ? due.map(it=>{
+    const cell=row.item_values[it.name]||{value:'empty',note:null,photos:[]};
+    return `<tr><td>${it.name}</td><td><span class="ic ${cell.value}" style="display:inline-block">${LBL[cell.value]}</span></td>
+      <td><button class="btn pri sm" onclick="openGradeFromItem(${row.store_id},${it.id})">📝 Evaluate</button></td></tr>`;
+  }).join('') : '<tr><td colspan="3" class="rolegate">Nothing due — everything is passing 🎉</td></tr>';
+}
+
+/* ---------------- MY STORE ITEMS (read-only Store Manager view) ---------------- */
+async function loadStoreItems(){
+  await loadEval();
+  $('#siStoreLbl').textContent=cfg.store();
+  $('#siPeriodLbl').textContent=cfg.period().period_key;
+  const row=(GEVAL&&GEVAL.rows||[]).find(r=>String(r.store_id)===String(cfg.store()));
+  const items=(GEVAL&&GEVAL.items)||[];
+  if(!row){$('#siRows').innerHTML='<tr><td colspan="4" class="rolegate">No evaluation data for this store/period yet.</td></tr>';return;}
+  $('#siRows').innerHTML = items.length ? items.map(it=>{
+    const cell=row.item_values[it.name]||{value:'empty',note:null,photos:[]};
+    return `<tr style="cursor:pointer" onclick="openItemDetails(${row.store_id},${it.id})" title="Click for full details">
+      <td><div class="taskname">${it.name}</div></td>
+      <td><span class="ic ${cell.value}" style="display:inline-block;cursor:default">${LBL[cell.value]}</span></td>
+      <td style="max-width:260px">${cell.note?cell.note:'<span class="hint">—</span>'}</td>
+      <td>${(cell.photos&&cell.photos.length)?`<div class="ph-row" onclick="event.stopPropagation()">${cell.photos.map(u=>`<a href="${u}" target="_blank"><img class="ph-thumb" src="${u}" alt="photo"></a>`).join('')}</div>`:'<span class="hint">—</span>'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="4" class="rolegate">No inspection items defined yet.</td></tr>';
+}
+// Read-only "all details" popup for one item — opened by clicking its row on "My Store Items".
+function openItemDetails(storeId,itemId){
+  const item=(GEVAL&&GEVAL.items||[]).find(x=>x.id===itemId);
+  const row=(GEVAL&&GEVAL.rows||[]).find(r=>r.store_id===storeId);
+  const cell=(row&&item&&row.item_values[item.name])||{value:'empty',note:null,photos:[]};
+  $('#idTitle').textContent=(item&&item.name)||('#'+itemId);
+  $('#idSub').textContent=`store ${storeId} · period ${cfg.period().period_key}`;
+  $('#idStatus').innerHTML=`<span class="ic ${cell.value}" style="display:inline-block;cursor:default">${LBL[cell.value]}</span>`;
+  $('#idNote').innerHTML=cell.note?cell.note:'<span class="hint">No notice left by the auditor.</span>';
+  $('#idPhotos').innerHTML=(cell.photos&&cell.photos.length)
+    ? `<div class="ph-row">${cell.photos.map(u=>`<a href="${u}" target="_blank"><img class="ph-thumb" src="${u}" alt="photo" style="width:96px;height:96px"></a>`).join('')}</div>`
+    : '<span class="hint">No photos attached.</span>';
+  $('#itemDetailsOverlay').classList.add('on');$('#itemDetailsModal').classList.add('on');
+}
+function closeItemDetails(){$('#itemDetailsOverlay').classList.remove('on');$('#itemDetailsModal').classList.remove('on');}
+
+async function exportCSV(){
+  const q=new URLSearchParams(cfg.period()).toString();const headers={'Accept':'text/csv'};const t=cfg.token();if(t)headers.Authorization='Bearer '+t;
+  try{const res=await fetch(cfg.base()+'/cleaning/reports/csv?'+q,{headers});if(!res.ok){toast('CSV '+res.status,true);return;}
+    const blob=await res.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='evaluation.csv';a.click();toast('CSV downloaded');}catch(e){toast('CSV error',true);}
+}
+
+/* ---------------- REPORT (client-side from GEVAL) ---------------- */
+function toggleReportMenu(e){e.stopPropagation();$('#reportMenu').classList.toggle('on');}
+document.addEventListener('click',()=>$('#reportMenu')&&$('#reportMenu').classList.remove('on'));
+function pcls(v){return v==='pass'?'p':v==='fail'?'f':v==='auto_fail'?'a':'e';}
+const REPORT_THEMES={
+  full: {title:'CLEANING REPORT',                    bar:'#efa94a', head:'#7a3f12', tint:'#fbe8cf'},
+  top:  {title:'TOP CLEANING PERFORMANCE STORES',     bar:'#9a9a9a', head:'#8a8a8a', tint:'#e6e6e6'},
+  watch:{title:'CLEANING PERFORMANCE WATCHLIST',      bar:'#b5573a', head:'#5c2310', tint:'#f0d8cf'},
+};
+// Score = (# pass items + 1 if commitment passes) / (items + 1)  — matches the Excel /8 formula.
+function reportScore(row, items){
+  let pass = items.filter(it=>(row.item_values[it.name]||{}).value==='pass').length;
+  const commitmentPass = Number(row.chart_score) >= 100;   // all chart tasks passed
+  if(commitmentPass) pass++;
+  const denom = items.length + 1;
+  return { pct: denom ? Math.round(pass/denom*1000)/10 : 0, commitmentPass };
+}
+function chartTasksHtml(row){
+  const tasks=[]; ['daily','weekly','monthly','hourly'].forEach(f=>((row.chart&&row.chart[f])||[]).forEach(t=>tasks.push(t)));
+  if(!tasks.length) return '<span class="cm-none">—</span>';
+  return tasks.map(t=>`<span class="cm-task ${t.verdict==='pass'?'p':(t.verdict?'f':'e')}">${t.name}</span>`).join('');
+}
+function scoreBar(pct){ return `<div class="sc-bar"><div class="sc-fill" style="width:${Math.max(0,Math.min(100,pct))}%"></div><span class="sc-txt">${pct.toFixed(1)}%</span></div>`; }
+function cellCls(v){ return v==='pass'?'p':(v==='empty'||!v?'e':'f'); }
+
+function openReport(kind){
+  $('#reportMenu').classList.remove('on');
+  if(!GEVAL){toast('Open Evaluation first',true);return;}
+  const items=GEVAL.items||[];
+  let rows=(GEVAL.rows||[]).map(r=>({...r, _sc:reportScore(r,items)}));
+  const theme = REPORT_THEMES[kind] || REPORT_THEMES.full;
+  let showGrand=false;
+  if(kind==='top'){   rows=rows.filter(r=>r._sc.pct>=100).sort((a,b)=>b._sc.pct-a._sc.pct); showGrand=true; }
+  if(kind==='watch'){ rows=rows.filter(r=>r._sc.pct<=50 ).sort((a,b)=>a._sc.pct-b._sc.pct); showGrand=true; }
+  const week=$('#periodKey').value;
+
+  const header=`<tr><th class="rp-store">Store#</th>${items.map(i=>`<th>${i.name}</th>`).join('')}<th>Cleaning chart commitment</th><th class="rp-sch">Score</th></tr>`;
+  const body=rows.map(r=>{
+    const cells=items.map(it=>{const v=(r.item_values[it.name]||{}).value||'empty';return `<td class="rp-${cellCls(v)}">${v==='empty'?'':LBL[v]}</td>`;}).join('');
+    const cm=`<td class="rp-cm rp-${r._sc.commitmentPass?'p':'f'}"><div class="cm-head">${r._sc.commitmentPass?'Pass':'Fail'}</div><div class="cm-tasks">${chartTasksHtml(r)}</div></td>`;
+    return `<tr><td class="rp-store">${r.store_id}</td>${cells}${cm}<td class="rp-score">${scoreBar(r._sc.pct)}</td></tr>`;
+  }).join('') || `<tr><td colspan="${items.length+3}" style="padding:16px;font-weight:600">No stores match.</td></tr>`;
+
+  let grand='';
+  if(showGrand && rows.length){
+    const avg=Math.round(rows.reduce((a,r)=>a+r._sc.pct,0)/rows.length*10)/10;
+    grand=`<tr class="rp-grand"><td>Grand Total</td><td colspan="${items.length+1}"></td><td class="rp-score">${scoreBar(avg)}</td></tr>`;
+  }
+
+  $('#rptModalTitle').textContent=theme.title;
+  $('#rptCanvas').innerHTML=`
+    <div class="rp" style="--bar:${theme.bar};--head:${theme.head};--tint:${theme.tint}">
+      <div class="rp-title"><div class="rp-week">Week ${week}</div><h2>${theme.title}</h2></div>
+      <table class="rp-grid"><thead>${header}</thead><tbody>${body}${grand}</tbody></table>
+    </div>`;
+  $('#rptOverlay').classList.add('on');$('#rptModal').classList.add('on');
+}
+function closeReport(){$('#rptOverlay').classList.remove('on');$('#rptModal').classList.remove('on');}
+function exportReportImage(){const node=$('#rptCanvas');if(window.html2canvas){html2canvas(node,{scale:2,backgroundColor:'#fff'}).then(c=>{const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download='report.png';a.click();});}else toast('html2canvas not loaded',true);}
+
+/* ---------------- NAV / ROLES ---------------- */
+const TITLES={tasks:'Tasks',create:'Create Task',eval:'Evaluation',notif:'Notifications',storeitems:'My Store Items'};
+function go(view){$$('.main section').forEach(s=>s.classList.add('hidden'));$('#v-'+view).classList.remove('hidden');
+  $$('#ccSub button').forEach(b=>b.classList.toggle('on',b.dataset.view===view));
+  $('#pageTitle').textContent=TITLES[view];$('#crumb').textContent=TITLES[view];
+  if(view==='tasks')loadDue(); if(view==='eval')loadEval(); if(view==='create')loadTasks(); if(view==='notif')loadNotifications(); if(view==='storeitems')loadStoreItems();}
+$$('#ccSub button').forEach(b=>b.onclick=()=>go(b.dataset.view));
+const META={manager:{name:'Store Manager',role:'own store',av:'SM'},audit:{name:'Auditor',role:'all stores',av:'AU'},super:{name:'Super Admin',role:'full',av:'SA'}};
+function applyRole(){const r=$('#role').value,m=META[r];$('#whoName').textContent=m.name;$('#whoRole').textContent=m.role;$('#avatar').textContent=m.av;
+  $$('#ccSub button').forEach(b=>{const allow=b.dataset.role==='both'||r==='audit'||r==='super';b.style.display=allow?'':'none';});
+  const active=$$('#ccSub button.on')[0];if(!active||active.style.display==='none'){const f=$$('#ccSub button').find(b=>b.style.display!=='none');if(f)go(f.dataset.view);}}
+$('#role').onchange=applyRole;
+function reloadView(){const v=$$('#ccSub button.on')[0]?.dataset.view||'tasks';go(v);}
+
+/* init */
+applyRole();loadDue();
+</script>
+</body>
+</html>

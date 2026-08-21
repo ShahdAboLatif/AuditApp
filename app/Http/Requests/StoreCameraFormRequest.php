@@ -17,9 +17,16 @@ class StoreCameraFormRequest extends FormRequest
             'store_id' => ['required', 'exists:stores,id'],
             'date' => ['required', 'date'],
             'entities' => ['required', 'array', 'min:1'],
+
             'entities.*.entity_id' => ['required', 'exists:entities,id'],
             'entities.*.rating_id' => ['nullable', 'exists:ratings,id'],
-            'entities.*.note' => ['nullable', 'string', 'max:65535'],
+
+            // notes array (optional)
+            'entities.*.notes' => ['nullable', 'array'],
+
+            'entities.*.notes.*.note' => ['nullable', 'string', 'max:65535'],
+            'entities.*.notes.*.images' => ['nullable', 'array'],
+            'entities.*.notes.*.images.*' => ['nullable', 'image', 'max:5120'],
         ];
     }
 
@@ -31,23 +38,38 @@ class StoreCameraFormRequest extends FormRequest
         ];
     }
 
-    /**
-     * Validate that at least one entity has either rating or note.
-     */
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
             $hasFilledEntity = false;
 
-            foreach ($this->entities ?? [] as $entity) {
-                if (!empty($entity['rating_id']) || !empty($entity['note'])) {
+            foreach (($this->entities ?? []) as $i => $entity) {
+                $hasRating = !empty($entity['rating_id']);
+
+                $notes = $entity['notes'] ?? [];
+                $hasNotesOrImages = false;
+
+                if (is_array($notes)) {
+                    foreach ($notes as $j => $noteRow) {
+                        $noteText = isset($noteRow['note']) ? trim((string)$noteRow['note']) : '';
+                        $files = $this->file("entities.$i.notes.$j.images") ?? [];
+                        $hasImages = is_array($files) && count($files) > 0;
+
+                        if ($noteText !== '' || $hasImages) {
+                            $hasNotesOrImages = true;
+                            break;
+                        }
+                    }
+                }
+
+                if ($hasRating || $hasNotesOrImages) {
                     $hasFilledEntity = true;
                     break;
                 }
             }
 
             if (!$hasFilledEntity) {
-                $validator->errors()->add('entities', 'At least one entity must have a rating or note.');
+                $validator->errors()->add('entities', 'At least one entity must have a rating, note, or image.');
             }
         });
     }

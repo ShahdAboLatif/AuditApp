@@ -1,0 +1,59 @@
+<?php
+
+namespace App\Services\EventConsume;
+
+use Exception;
+
+class EventRouter
+{
+
+    private array $map;
+    public function __construct()
+    {
+        $devMode = (bool) config('nats.dev_mode');
+
+        $authPrefix = $devMode
+            ? 'auth.testing.v1'
+            : 'auth.v1';
+
+        $hiringPrefix = $devMode
+            ? 'hiring.testing.v1'
+            : 'hiring.v1';
+
+
+        $this->map = [
+            // USERS
+            "{$authPrefix}.user.created" => \App\Services\EventConsume\Handlers\UserCreatedHandler::class,
+            "{$authPrefix}.user.updated" => \App\Services\EventConsume\Handlers\UserUpdatedHandler::class,
+            "{$authPrefix}.user.deleted" => \App\Services\EventConsume\Handlers\UserDeletedHandler::class,
+
+            // STORES
+            "{$authPrefix}.store.created" => \App\Services\EventConsume\Handlers\StoreCreatedHandler::class,
+            "{$authPrefix}.store.updated" => \App\Services\EventConsume\Handlers\StoreUpdatedHandler::class,
+            "{$authPrefix}.store.deleted" => \App\Services\EventConsume\Handlers\StoreDeletedHandler::class,
+
+            // ASSIGNMENTS => replicate qa_auditor into user_store_roles
+            "{$authPrefix}.assignment.user_role_store.assigned" => \App\Services\EventConsume\Handlers\UserStoreRoleAssignedHandler::class,
+            "{$authPrefix}.assignment.user_role_store.removed" => \App\Services\EventConsume\Handlers\UserStoreRoleRemovedHandler::class,
+            "{$authPrefix}.assignment.user_role_store.toggled" => \App\Services\EventConsume\Handlers\UserStoreRoleToggledHandler::class,
+            "{$authPrefix}.assignment.user_role_store.bulk_assigned" => \App\Services\EventConsume\Handlers\UserStoreRoleBulkAssignedHandler::class,
+
+            // EMPLOYEES (from HiringPizza) => replicate into employees (store_id)
+            "{$hiringPrefix}.employee.created" => \App\Services\EventConsume\Handlers\EmployeeCreatedHandler::class,
+            "{$hiringPrefix}.employee.updated" => \App\Services\EventConsume\Handlers\EmployeeUpdatedHandler::class,
+            "{$hiringPrefix}.employee.deleted" => \App\Services\EventConsume\Handlers\EmployeeDeletedHandler::class,
+        ];
+    }
+    public function getResolvedMap(): array
+    {
+        return $this->map;
+    }
+    public function resolve(string $subject): string
+    {
+        if (!isset($this->map[$subject])) {
+            throw new Exception("No handler for subject '{$subject}'");
+        }
+
+        return $this->map[$subject];
+    }
+}

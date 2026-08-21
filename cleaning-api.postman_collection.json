@@ -1,0 +1,243 @@
+{
+  "info": {
+    "name": "AuditApp — Cleaning Chart API",
+    "description": "All Cleaning Chart endpoints. Set the collection variables (base_url, token, store_id, …) then run. Auth is Bearer {{token}} on every request. See docs/FRONTEND_GUIDE.md for full details.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [ { "key": "token", "value": "{{token}}", "type": "string" } ]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000/api" },
+    { "key": "token", "value": "" },
+    { "key": "store_id", "value": "1" },
+    { "key": "task_id", "value": "1" },
+    { "key": "date", "value": "2026-07-22" },
+    { "key": "from", "value": "2026-07-20" },
+    { "key": "to", "value": "2026-07-26" },
+    { "key": "period_type", "value": "week" },
+    { "key": "period_key", "value": "2026-W30" },
+    { "key": "inspection_item_id", "value": "1" },
+    { "key": "cleaning_task_id", "value": "1" },
+    { "key": "employee_id", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Track 1 — Tasks & Due",
+      "item": [
+        {
+          "name": "Create task",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/tasks", "host": ["{{base_url}}"], "path": ["cleaning","tasks"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Clean the oven\",\n  \"description\": \"Degrease interior + trays\",\n  \"weight\": 20,\n  \"frequency\": \"weekly\",\n  \"interval\": 1,\n  \"week_days\": [1],\n  \"interval_hours\": null,\n  \"starts_at\": \"2026-07-20\",\n  \"ends_at\": null,\n  \"due_time\": null,\n  \"store_ids\": [1]\n}"
+            },
+            "description": "photo_required is derived from frequency (true unless hourly) — do NOT send it. interval_hours required only when frequency=hourly. store_ids = internal store ids."
+          }
+        },
+        {
+          "name": "List tasks",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/tasks", "host": ["{{base_url}}"], "path": ["cleaning","tasks"] }
+          }
+        },
+        {
+          "name": "Show task",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["cleaning","tasks","{{task_id}}"] }
+          }
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["cleaning","tasks","{{task_id}}"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Clean the oven (updated)\",\n  \"weight\": 30\n}" },
+            "description": "Send ONLY the fields that changed. photo_required re-derived if frequency changes. Send store_ids to re-assign stores."
+          }
+        },
+        {
+          "name": "Delete task (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/tasks/{{task_id}}", "host": ["{{base_url}}"], "path": ["cleaning","tasks","{{task_id}}"] },
+            "description": "Soft delete: removed from Due lists, history/completions preserved. Returns { deleted: true }."
+          }
+        },
+        {
+          "name": "Due on date",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/stores/{{store_id}}/dates/{{date}}/due", "host": ["{{base_url}}"], "path": ["cleaning","stores","{{store_id}}","dates","{{date}}","due"] },
+            "description": "Returns { store_id, date, items:[… with status pending|done|overdue…], employees:[…] }. Employees for the complete form come back here."
+          }
+        },
+        {
+          "name": "Due range",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/cleaning/stores/{{store_id}}/due-range?from={{from}}&to={{to}}",
+              "host": ["{{base_url}}"], "path": ["cleaning","stores","{{store_id}}","due-range"],
+              "query": [ { "key": "from", "value": "{{from}}" }, { "key": "to", "value": "{{to}}" } ]
+            }
+          }
+        },
+        {
+          "name": "Complete task",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/stores/{{store_id}}/tasks/{{task_id}}/complete", "host": ["{{base_url}}"], "path": ["cleaning","stores","{{store_id}}","tasks","{{task_id}}","complete"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "date", "value": "{{date}}", "type": "text" },
+                { "key": "employee_ids[]", "value": "{{employee_id}}", "type": "text" },
+                { "key": "note", "value": "done during opening", "type": "text" },
+                { "key": "photo", "type": "file", "src": [], "description": "required unless the task is hourly" }
+              ]
+            },
+            "description": "multipart/form-data. Rules: >=1 employee_ids[] (422); photo required for daily/weekly/monthly (422)."
+          }
+        },
+        {
+          "name": "Uncomplete task",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/stores/{{store_id}}/tasks/{{task_id}}/uncomplete", "host": ["{{base_url}}"], "path": ["cleaning","stores","{{store_id}}","tasks","{{task_id}}","uncomplete"] },
+            "body": { "mode": "raw", "raw": "{\n  \"date\": \"{{date}}\"\n}" }
+          }
+        },
+        {
+          "name": "Task history",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/cleaning/stores/{{store_id}}/tasks/{{task_id}}/history?from={{from}}&to={{to}}",
+              "host": ["{{base_url}}"], "path": ["cleaning","stores","{{store_id}}","tasks","{{task_id}}","history"],
+              "query": [ { "key": "from", "value": "{{from}}" }, { "key": "to", "value": "{{to}}" } ]
+            },
+            "description": "Past periods (done + derived overdue). photos[] are relative URLs (/storage/…)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Track 2 — Evaluation",
+      "item": [
+        {
+          "name": "Get grid",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/cleaning/evaluations?period_type={{period_type}}&period_key={{period_key}}",
+              "host": ["{{base_url}}"], "path": ["cleaning","evaluations"],
+              "query": [ { "key": "period_type", "value": "{{period_type}}" }, { "key": "period_key", "value": "{{period_key}}" } ]
+            },
+            "description": "Returns { period_type, period_key, items:[{id,name}], rows:[{store_id, store, item_values, item_score, chart, chart_score, weight_lost}] }."
+          }
+        },
+        {
+          "name": "Upsert cell — item value",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/evaluations", "host": ["{{base_url}}"], "path": ["cleaning","evaluations"] },
+            "body": { "mode": "raw", "raw": "{\n  \"store_id\": {{store_id}},\n  \"period_type\": \"{{period_type}}\",\n  \"period_key\": \"{{period_key}}\",\n  \"kind\": \"item\",\n  \"inspection_item_id\": {{inspection_item_id}},\n  \"value\": \"fail\"\n}" },
+            "description": "value = pass | fail | auto_fail | empty"
+          }
+        },
+        {
+          "name": "Upsert cell — chart verdict",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/evaluations", "host": ["{{base_url}}"], "path": ["cleaning","evaluations"] },
+            "body": { "mode": "raw", "raw": "{\n  \"store_id\": {{store_id}},\n  \"period_type\": \"{{period_type}}\",\n  \"period_key\": \"{{period_key}}\",\n  \"kind\": \"chart\",\n  \"cleaning_task_id\": {{cleaning_task_id}},\n  \"verdict\": \"pass\"\n}" },
+            "description": "verdict = pass | fail | auto_fail"
+          }
+        },
+        {
+          "name": "Finalize store (notify)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/evaluations/finalize", "host": ["{{base_url}}"], "path": ["cleaning","evaluations","finalize"] },
+            "body": { "mode": "raw", "raw": "{\n  \"store_id\": {{store_id}},\n  \"period_type\": \"{{period_type}}\",\n  \"period_key\": \"{{period_key}}\"\n}" }
+          }
+        },
+        {
+          "name": "List inspection items",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/inspection-items", "host": ["{{base_url}}"], "path": ["cleaning","inspection-items"] }
+          }
+        },
+        {
+          "name": "Add inspection item",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/inspection-items", "host": ["{{base_url}}"], "path": ["cleaning","inspection-items"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Parking\"\n}" }
+          }
+        },
+        {
+          "name": "Delete inspection item",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": { "raw": "{{base_url}}/cleaning/inspection-items/{{inspection_item_id}}", "host": ["{{base_url}}"], "path": ["cleaning","inspection-items","{{inspection_item_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Report data (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/cleaning/reports/data?period_type={{period_type}}&period_key={{period_key}}",
+              "host": ["{{base_url}}"], "path": ["cleaning","reports","data"],
+              "query": [ { "key": "period_type", "value": "{{period_type}}" }, { "key": "period_key", "value": "{{period_key}}" } ]
+            },
+            "description": "Same shape as the grid; render the 3 report views client-side. Score = (pass items + commitment) / (items + 1)."
+          }
+        },
+        {
+          "name": "Report CSV",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "text/csv" } ],
+            "url": {
+              "raw": "{{base_url}}/cleaning/reports/csv?period_type={{period_type}}&period_key={{period_key}}",
+              "host": ["{{base_url}}"], "path": ["cleaning","reports","csv"],
+              "query": [ { "key": "period_type", "value": "{{period_type}}" }, { "key": "period_key", "value": "{{period_key}}" } ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

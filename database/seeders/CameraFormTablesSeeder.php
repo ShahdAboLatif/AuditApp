@@ -2,11 +2,11 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Category;
 use App\Models\Entity;
 use App\Models\Rating;
 use App\Models\Store;
+use Illuminate\Database\Seeder;
 
 class CameraFormTablesSeeder extends Seeder
 {
@@ -51,6 +51,7 @@ class CameraFormTablesSeeder extends Seeder
             ['label' => 'Not Done'],
             ['label' => 'Camera failure'],
             ['label' => 'Auto Fail'],
+            ['label' => 'Urgent'],
         ];
 
         foreach ($ratings as $rating) {
@@ -145,7 +146,7 @@ class CameraFormTablesSeeder extends Seeder
                 'category_id' => $staffAlignment->id,
                 'date_range_type' => 'daily',
                 'report_type' => 'main',
-            ]
+            ],
         ];
 
         foreach ($entities as $entity) {
