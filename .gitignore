@@ -28,3 +28,4 @@ yarn-error.log
 /.vscode
 /.zed
 docker-compose.yml
+/docs/
